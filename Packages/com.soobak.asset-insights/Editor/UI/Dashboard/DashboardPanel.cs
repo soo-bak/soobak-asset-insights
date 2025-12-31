@@ -81,8 +81,8 @@ namespace Soobak.AssetInsights {
       Add(summarySection);
     }
 
-    public void Refresh() {
-      if (_graph.NodeCount == 0) {
+    public void SetResult(HealthScoreResult result) {
+      if (result == null) {
         _gradeLabel.text = "--";
         _scoreLabel.text = "Scan project first";
         _scoreGauge.style.width = Length.Percent(0);
@@ -90,12 +90,20 @@ namespace Soobak.AssetInsights {
         return;
       }
 
-      var calculator = new HealthScoreCalculator(_graph);
-      _lastResult = calculator.Calculate();
-
+      _lastResult = result;
       UpdateScoreDisplay();
       UpdateBreakdown();
       UpdateSummary();
+    }
+
+    public void Refresh() {
+      if (_graph.NodeCount == 0) {
+        SetResult(null);
+        return;
+      }
+
+      var calculator = new HealthScoreCalculator(_graph);
+      SetResult(calculator.Calculate());
     }
 
     void UpdateScoreDisplay() {

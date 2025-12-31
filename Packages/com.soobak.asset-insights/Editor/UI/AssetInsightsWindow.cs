@@ -14,6 +14,7 @@ namespace Soobak.AssetInsights {
     bool _isScanning;
     List<AssetNodeModel> _filteredNodes = new();
     string _selectedAssetPath;
+    HealthScoreResult _cachedHealthResult;
 
     VisualElement _root;
     ProgressBar _progressBar;
@@ -123,14 +124,59 @@ namespace Soobak.AssetInsights {
       _graphContainer.style.flexShrink = 1;
       _graphContainer.style.display = DisplayStyle.None;
 
-      var helpLabel = new Label("Select an asset from the list and click 'Show Graph' to visualize dependencies");
-      helpLabel.name = "graph-help";
-      helpLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-      helpLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
-      helpLabel.style.marginTop = 50;
-      _graphContainer.Add(helpLabel);
+      var helpContainer = new VisualElement();
+      helpContainer.name = "graph-help";
+      helpContainer.style.alignItems = Align.Center;
+      helpContainer.style.justifyContent = Justify.Center;
+      helpContainer.style.flexGrow = 1;
+
+      var helpTitle = new Label("Dependency Graph");
+      helpTitle.style.fontSize = 18;
+      helpTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+      helpTitle.style.marginBottom = 12;
+      helpContainer.Add(helpTitle);
+
+      var helpText = new Label("1. Select an asset in the List tab\n2. Click 'Show Graph' button\n\nOr click a button below to visualize:");
+      helpText.style.unityTextAlign = TextAnchor.MiddleCenter;
+      helpText.style.color = new Color(0.6f, 0.6f, 0.6f);
+      helpText.style.whiteSpace = WhiteSpace.Normal;
+      helpText.style.marginBottom = 16;
+      helpContainer.Add(helpText);
+
+      var quickButtons = new VisualElement();
+      quickButtons.style.flexDirection = FlexDirection.Row;
+
+      var largestButton = new Button(() => ShowLargestAssetGraph()) { text = "Largest Asset" };
+      largestButton.style.marginRight = 8;
+      quickButtons.Add(largestButton);
+
+      var mostConnectedButton = new Button(() => ShowMostConnectedAssetGraph()) { text = "Most Connected" };
+      quickButtons.Add(mostConnectedButton);
+
+      helpContainer.Add(quickButtons);
+      _graphContainer.Add(helpContainer);
 
       _root.Add(_graphContainer);
+    }
+
+    void ShowLargestAssetGraph() {
+      if (_scanner.Graph.NodeCount == 0) return;
+      var largest = _scanner.Graph.GetNodesBySize(1).FirstOrDefault();
+      if (largest != null) {
+        _selectedAssetPath = largest.Path;
+        ShowAssetInGraph(largest.Path);
+      }
+    }
+
+    void ShowMostConnectedAssetGraph() {
+      if (_scanner.Graph.NodeCount == 0) return;
+      var mostConnected = _scanner.Graph.Nodes.Values
+        .OrderByDescending(n => _scanner.Graph.GetDependents(n.Path).Count + _scanner.Graph.GetDependencies(n.Path).Count)
+        .FirstOrDefault();
+      if (mostConnected != null) {
+        _selectedAssetPath = mostConnected.Path;
+        ShowAssetInGraph(mostConnected.Path);
+      }
     }
 
     void SwitchToView(int view) {
@@ -148,17 +194,17 @@ namespace Soobak.AssetInsights {
       if (view == 1 && !string.IsNullOrEmpty(_selectedAssetPath))
         ShowAssetInGraph(_selectedAssetPath);
 
-      if (view == 2)
-        _dashboardPanel?.Refresh();
+      if (view == 2 && _cachedHealthResult != null)
+        _dashboardPanel?.SetResult(_cachedHealthResult);
     }
 
     void ShowAssetInGraph(string assetPath) {
       if (_scanner.Graph.NodeCount == 0)
         return;
 
-      var helpLabel = _graphContainer.Q<Label>("graph-help");
-      if (helpLabel != null)
-        helpLabel.style.display = DisplayStyle.None;
+      var helpContainer = _graphContainer.Q("graph-help");
+      if (helpContainer != null)
+        helpContainer.style.display = DisplayStyle.None;
 
       if (_graphView == null) {
         _graphView = new DependencyGraphView(_scanner.Graph);
@@ -470,29 +516,37 @@ namespace Soobak.AssetInsights {
 
       var graph = _scanner.Graph;
       _progressBar.value = 100f;
-      _progressBar.title = $"Complete - {graph.NodeCount} assets ({AssetNodeModel.FormatBytes(graph.GetTotalSize())})";
-      _statusLabel.text = "";
+      _progressBar.title = $"Analyzing...";
+      _statusLabel.text = "Calculating health score...";
 
-      UpdateSummary();
+      // Run analysis after scan (delayed to allow UI update)
+      EditorApplication.delayCall += () => {
+        var calculator = new HealthScoreCalculator(graph);
+        _cachedHealthResult = calculator.Calculate();
 
-      _scanButton.SetEnabled(true);
-      _cancelButton.SetEnabled(false);
-      _exportButton.SetEnabled(graph.NodeCount > 0);
+        _progressBar.title = $"Complete - {graph.NodeCount} assets ({AssetNodeModel.FormatBytes(graph.GetTotalSize())})";
+        _statusLabel.text = $"Health: {_cachedHealthResult.Grade} ({_cachedHealthResult.Score}/100)";
 
-      // Reset graph view for new scan data
-      if (_graphView != null) {
-        _graphContainer.Remove(_graphView);
-        _graphView = null;
-      }
-      var helpLabel = _graphContainer?.Q<Label>("graph-help");
-      if (helpLabel != null)
-        helpLabel.style.display = DisplayStyle.Flex;
+        UpdateSummary();
 
-      // Refresh dashboard if visible
-      if (_currentView == 2)
-        _dashboardPanel?.Refresh();
+        _scanButton.SetEnabled(true);
+        _cancelButton.SetEnabled(false);
+        _exportButton.SetEnabled(graph.NodeCount > 0);
 
-      RefreshAssetList();
+        // Reset graph view for new scan data
+        if (_graphView != null) {
+          _graphContainer.Remove(_graphView);
+          _graphView = null;
+        }
+        var helpContainer = _graphContainer?.Q("graph-help");
+        if (helpContainer != null)
+          helpContainer.style.display = DisplayStyle.Flex;
+
+        // Update dashboard with cached result
+        _dashboardPanel?.SetResult(_cachedHealthResult);
+
+        RefreshAssetList();
+      };
     }
 
     void UpdateSummary() {
