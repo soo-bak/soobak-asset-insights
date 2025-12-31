@@ -23,6 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  UNITY_VERSION: 6000.2.5f1
   UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
   UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
   UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -32,19 +33,29 @@ jobs:
     name: EditMode Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           lfs: true
 
+      - name: Guard license secret
+        if: ${{ env.UNITY_LICENSE == '' }}
+        run: |
+          echo "::error::UNITY_LICENSE secret is required."
+          exit 1
+
       - name: Cache Library
         uses: actions/cache@v4
         with:
           path: Library
-          key: ${{ runner.os }}-unity-library-${{ hashFiles('Packages/manifest.json') }}
+          key: ${{ runner.os }}-unity-${{ env.UNITY_VERSION }}-${{ hashFiles('Packages/manifest.json') }}
           restore-keys: |
-            ${{ runner.os }}-unity-library-
+            ${{ runner.os }}-unity-${{ env.UNITY_VERSION }}-
 
       - name: Run EditMode Tests
         uses: game-ci/unity-test-runner@v4
@@ -55,10 +66,11 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
-          unityVersion: 2021.3.0f1
+          unityVersion: ${{ env.UNITY_VERSION }}
           testMode: EditMode
           artifactsPath: artifacts
           checkName: EditMode Test Results
+          customImage: unityci/editor:ubuntu-6000.2.5f1-base-3.1
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4

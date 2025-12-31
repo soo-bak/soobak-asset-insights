@@ -81,7 +81,7 @@ Packages/com.soobak.asset-insights/
 
 ## Requirements
 
-- Unity 2021.3 LTS or later
+- Unity 6 (6000.0) or later
 - Editor Coroutines package (auto-installed)
 
 ## License
