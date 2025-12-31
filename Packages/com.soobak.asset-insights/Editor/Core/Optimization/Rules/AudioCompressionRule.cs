@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEngine;
 
 namespace Soobak.AssetInsights {
   public class AudioCompressionRule : IOptimizationRule {
