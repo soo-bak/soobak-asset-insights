@@ -2,13 +2,14 @@ using System.Collections;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using Unity.EditorCoroutines.Editor;
+
 
 namespace Soobak.AssetInsights {
   public class AssetInsightsWindow : EditorWindow {
     IDependencyScanner _scanner;
     IReportExporter _exporter;
-    EditorCoroutine _scanCoroutine;
+    IEnumerator _scanEnumerator;
+    bool _isScanning;
 
     VisualElement _root;
     ProgressBar _progressBar;
@@ -205,28 +206,40 @@ namespace Soobak.AssetInsights {
     void StartScan() {
       CancelScan();
       _scanner.Clear();
-      _scanCoroutine = EditorCoroutineUtility.StartCoroutine(ScanRoutine(), this);
-      UpdateUI();
-    }
+      _isScanning = true;
 
-    IEnumerator ScanRoutine() {
+      var options = new ScanOptions();
+      _scanEnumerator = _scanner.ScanAsync(options);
+
       _scanButton.SetEnabled(false);
       _cancelButton.SetEnabled(true);
 
-      var options = new ScanOptions();
-      var enumerator = _scanner.ScanAsync(options);
+      EditorApplication.update += OnScanUpdate;
+      UpdateUI();
+    }
 
-      while (enumerator.MoveNext()) {
+    void OnScanUpdate() {
+      if (!_isScanning || _scanEnumerator == null) {
+        StopScanUpdate();
+        return;
+      }
+
+      if (_scanEnumerator.MoveNext()) {
         var progress = _scanner.Progress;
         _progressBar.value = progress.Progress * 100f;
         _progressBar.title = $"Scanning... {progress.ProcessedCount}/{progress.TotalCount}";
         _statusLabel.text = progress.CurrentAsset ?? "";
 
-        if (progress.IsCancelled)
-          break;
-
-        yield return null;
+        if (progress.IsCancelled) {
+          StopScanUpdate();
+        }
+      } else {
+        OnScanComplete();
       }
+    }
+
+    void OnScanComplete() {
+      StopScanUpdate();
 
       _progressBar.value = 100f;
       _progressBar.title = $"Complete - {_scanner.Graph.NodeCount} assets";
@@ -239,14 +252,18 @@ namespace Soobak.AssetInsights {
       RefreshAssetList();
     }
 
+    void StopScanUpdate() {
+      EditorApplication.update -= OnScanUpdate;
+      _scanEnumerator = null;
+      _isScanning = false;
+    }
     void CancelScan() {
-      if (_scanCoroutine != null) {
-        EditorCoroutineUtility.StopCoroutine(_scanCoroutine);
-        _scanCoroutine = null;
-      }
+      if (_isScanning) {
+        StopScanUpdate();
 
-      if (_scanner?.Progress is ScanProgress progress)
-        progress.Cancel();
+        if (_scanner?.Progress is ScanProgress progress)
+          progress.Cancel();
+      }
 
       UpdateUI();
     }
@@ -266,9 +283,9 @@ namespace Soobak.AssetInsights {
     }
 
     void UpdateUI() {
-      bool isScanning = _scanCoroutine != null;
-      _scanButton?.SetEnabled(!isScanning);
-      _cancelButton?.SetEnabled(isScanning);
+      
+      _scanButton?.SetEnabled(!_isScanning);
+      _cancelButton?.SetEnabled(_isScanning);
     }
 
     void ShowExportMenu() {
