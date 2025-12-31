@@ -1,0 +1,31 @@
+# IDE
+.vs/
+.claude/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userprefs
+*.sln
+*.csproj
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Unity
+*.pidb
+*.pdb
+*.mdb
+
+# Build artifacts
+[Bb]uild/
+[Bb]in/
+[Oo]bj/
+
+# Test coverage
+[Cc]overage/
+*.coverage
+
+# Logs
+*.log
