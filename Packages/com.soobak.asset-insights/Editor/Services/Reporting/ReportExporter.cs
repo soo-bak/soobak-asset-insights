@@ -26,7 +26,7 @@ namespace Soobak.AssetInsights {
 
       var roots = rootAsset != null
         ? new[] { rootAsset }
-        : graph.Nodes.Keys.Where(k => graph.GetDependents(k).Count == 0);
+        : graph.Nodes.Keys.Where(k => graph.GetDependents(k).Count == 0 && k != targetAsset);
 
       var pathDict = PathFinder.FindWhyIncluded(graph, roots, targetAsset);
 
