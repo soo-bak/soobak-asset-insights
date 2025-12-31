@@ -1,9 +1,7 @@
 {
   "name": "Soobak.AssetInsights.Services",
   "rootNamespace": "Soobak.AssetInsights",
-  "references": [
-    "Soobak.AssetInsights.Editor"
-  ],
+  "references": [],
   "includePlatforms": [
     "Editor"
   ],
