@@ -1,6 +1,7 @@
 # IDE
 .vs/
 .claude/
+CLAUDE.md
 .vscode/
 .idea/
 *.suo
