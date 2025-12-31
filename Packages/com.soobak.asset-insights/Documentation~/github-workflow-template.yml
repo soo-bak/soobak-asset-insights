@@ -1,0 +1,66 @@
+# Asset Insights CI/CD Integration
+# Copy this file to .github/workflows/asset-analysis.yml in your Unity project
+
+name: Asset Analysis
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+
+env:
+  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+
+jobs:
+  analyze:
+    name: Analyze Assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: game-ci/unity-builder@v4
+        id: unity
+        with:
+          unityVersion: auto
+          targetPlatform: StandaloneLinux64
+          buildMethod: Soobak.AssetInsights.HeadlessRunner.Run
+          customParameters: -outputPath ./asset-report.json -failOnScore 60
+
+      - name: Upload Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: asset-insights-report
+          path: asset-report.json
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('asset-report.json', 'utf8'));
+
+            const body = `## Asset Insights Report
+
+            | Metric | Value |
+            |--------|-------|
+            | Health Grade | **${report.healthGrade}** (${report.healthScore}/100) |
+            | Total Assets | ${report.totalAssets} |
+            | Unused Assets | ${report.unusedAssetCount} |
+            | Optimization Issues | ${report.optimizationIssueCount} |
+
+            [View full report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

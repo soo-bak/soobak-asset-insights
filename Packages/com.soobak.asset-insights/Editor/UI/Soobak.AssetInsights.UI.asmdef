@@ -3,8 +3,7 @@
   "rootNamespace": "Soobak.AssetInsights",
   "references": [
     "Soobak.AssetInsights.Editor",
-    "Soobak.AssetInsights.Services",
-    "Unity.EditorCoroutines.Editor"
+    "Soobak.AssetInsights.Services"
   ],
   "includePlatforms": [
     "Editor"
