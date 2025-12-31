@@ -27,7 +27,7 @@ namespace Soobak.AssetInsights {
       if (IncludeTypes.Count > 0 && !IncludeTypes.Contains(node.Type))
         return false;
 
-      if (MinFileSize > 0 && node.FileSize < MinFileSize)
+      if (MinFileSize > 0 && node.SizeBytes < MinFileSize)
         return false;
 
       if (!IncludePackages && node.Path.StartsWith("Packages/"))

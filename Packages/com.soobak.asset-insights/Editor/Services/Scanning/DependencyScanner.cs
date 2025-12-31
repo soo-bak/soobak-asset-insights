@@ -94,7 +94,7 @@ namespace Soobak.AssetInsights {
         if (depPath == path)
           continue;
 
-        if (!_graph.HasNode(depPath)) {
+        if (!_graph.ContainsNode(depPath)) {
           var depNode = CreateNode(depPath);
           _graph.AddNode(depNode);
         }

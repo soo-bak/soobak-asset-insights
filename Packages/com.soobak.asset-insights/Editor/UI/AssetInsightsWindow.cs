@@ -175,7 +175,7 @@ namespace Soobak.AssetInsights {
     }
 
     void BindAssetItem(VisualElement element, int index) {
-      var nodes = _scanner.Graph.GetHeavyHitters(_scanner.Graph.NodeCount);
+      var nodes = _scanner.Graph.GetNodesBySize(_scanner.Graph.NodeCount);
       if (index >= nodes.Count)
         return;
 
@@ -253,7 +253,7 @@ namespace Soobak.AssetInsights {
 
     void RefreshAssetList() {
       var search = _searchField?.value?.ToLowerInvariant() ?? "";
-      var nodes = _scanner.Graph.GetHeavyHitters(_scanner.Graph.NodeCount);
+      var nodes = _scanner.Graph.GetNodesBySize(_scanner.Graph.NodeCount);
 
       if (!string.IsNullOrEmpty(search)) {
         nodes = nodes.FindAll(n =>

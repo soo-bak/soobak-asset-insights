@@ -24,24 +24,29 @@ namespace Soobak.AssetInsights {
       sb.AppendLine($"**Target Asset:** `{targetAsset}`");
       sb.AppendLine();
 
-      var paths = PathFinder.FindWhyIncluded(graph, targetAsset, rootAsset);
+      var roots = rootAsset != null
+        ? new[] { rootAsset }
+        : graph.Nodes.Keys.Where(k => graph.GetDependents(k).Count == 0);
 
-      if (paths.Count == 0) {
+      var pathDict = PathFinder.FindWhyIncluded(graph, roots, targetAsset);
+
+      if (pathDict.Count == 0) {
         sb.AppendLine("No dependency paths found.");
         return sb.ToString();
       }
 
-      sb.AppendLine($"Found **{paths.Count}** dependency path(s):");
+      sb.AppendLine($"Found **{pathDict.Count}** dependency path(s):");
       sb.AppendLine();
 
       int pathIndex = 1;
-      foreach (var path in paths) {
+      foreach (var kvp in pathDict) {
+        var path = kvp.Value;
         sb.AppendLine($"### Path {pathIndex++}");
         sb.AppendLine("```");
         for (int i = 0; i < path.Count; i++) {
           var indent = new string(' ', i * 2);
-          var arrow = i < path.Count - 1 ? " →" : " (target)";
-          sb.AppendLine($"{indent}{path[i]}{arrow}");
+          var arrow = i < path.Count - 1 ? " ->" : " (target)";
+          sb.AppendLine($"{indent}{path[i].Path}{arrow}");
         }
         sb.AppendLine("```");
         sb.AppendLine();
@@ -55,14 +60,14 @@ namespace Soobak.AssetInsights {
       sb.AppendLine("# Heavy Hitters Report");
       sb.AppendLine();
 
-      var heavyHitters = graph.GetHeavyHitters(count);
+      var heavyHitters = graph.GetNodesBySize(count);
 
       if (heavyHitters.Count == 0) {
         sb.AppendLine("No assets found.");
         return sb.ToString();
       }
 
-      long totalSize = heavyHitters.Sum(n => n.FileSize);
+      long totalSize = heavyHitters.Sum(n => n.SizeBytes);
 
       sb.AppendLine($"Top **{heavyHitters.Count}** largest assets (Total: {FormatSize(totalSize)}):");
       sb.AppendLine();
@@ -80,7 +85,7 @@ namespace Soobak.AssetInsights {
 
       var byType = heavyHitters
         .GroupBy(n => n.Type)
-        .Select(g => new { Type = g.Key, Size = g.Sum(n => n.FileSize), Count = g.Count() })
+        .Select(g => new { Type = g.Key, Size = g.Sum(n => n.SizeBytes), Count = g.Count() })
         .OrderByDescending(x => x.Size);
 
       sb.AppendLine("| Type | Count | Total Size |");
@@ -127,7 +132,7 @@ namespace Soobak.AssetInsights {
       sb.AppendLine("```mermaid");
       sb.AppendLine("flowchart TD");
 
-      var nodes = graph.GetAllNodes().Take(50);
+      var nodes = graph.Nodes.Values.Take(50).ToList();
       var nodeIds = new Dictionary<string, string>();
       int nodeIndex = 0;
 
@@ -167,11 +172,11 @@ namespace Soobak.AssetInsights {
       sb.AppendLine($"  \"edgeCount\": {graph.EdgeCount},");
       sb.AppendLine("  \"nodes\": [");
 
-      var nodes = graph.GetAllNodes().ToList();
+      var nodes = graph.Nodes.Values.ToList();
       for (int i = 0; i < nodes.Count; i++) {
         var node = nodes[i];
         var comma = i < nodes.Count - 1 ? "," : "";
-        sb.AppendLine($"    {{\"path\": \"{EscapeJson(node.Path)}\", \"size\": {node.FileSize}, \"type\": \"{node.Type}\"}}{comma}");
+        sb.AppendLine($"    {{\"path\": \"{EscapeJson(node.Path)}\", \"size\": {node.SizeBytes}, \"type\": \"{node.Type}\"}}{comma}");
       }
 
       sb.AppendLine("  ]");
@@ -180,14 +185,14 @@ namespace Soobak.AssetInsights {
     }
 
     void AppendSizeBreakdown(StringBuilder sb, DependencyGraph graph, ReportOptions options) {
-      var nodes = graph.GetAllNodes();
+      IEnumerable<AssetNodeModel> nodes = graph.Nodes.Values;
 
       if (options.FilterTypes.Count > 0)
         nodes = nodes.Where(n => options.FilterTypes.Contains(n.Type));
 
       var byType = nodes
         .GroupBy(n => n.Type)
-        .Select(g => new { Type = g.Key, Size = g.Sum(n => n.FileSize), Count = g.Count() })
+        .Select(g => new { Type = g.Key, Size = g.Sum(n => n.SizeBytes), Count = g.Count() })
         .OrderByDescending(x => x.Size);
 
       sb.AppendLine("| Type | Count | Total Size |");
@@ -201,13 +206,13 @@ namespace Soobak.AssetInsights {
     }
 
     void AppendHeavyHitters(StringBuilder sb, DependencyGraph graph, ReportOptions options) {
-      var nodes = graph.GetAllNodes();
+      IEnumerable<AssetNodeModel> nodes = graph.Nodes.Values;
 
       if (options.FilterTypes.Count > 0)
         nodes = nodes.Where(n => options.FilterTypes.Contains(n.Type));
 
       var heavyHitters = nodes
-        .OrderByDescending(n => n.FileSize)
+        .OrderByDescending(n => n.SizeBytes)
         .Take(options.TopHeavyHittersCount);
 
       sb.AppendLine("| # | Size | Type | Asset Path |");
@@ -222,16 +227,22 @@ namespace Soobak.AssetInsights {
     }
 
     void AppendDependencyPaths(StringBuilder sb, DependencyGraph graph, ReportOptions options) {
-      var paths = PathFinder.FindWhyIncluded(graph, options.TargetAsset);
+      var roots = graph.Nodes.Keys.Where(k => graph.GetDependents(k).Count == 0);
+      var pathDict = PathFinder.FindWhyIncluded(graph, roots, options.TargetAsset);
 
-      if (paths.Count == 0) {
+      if (pathDict.Count == 0) {
         sb.AppendLine("No dependency paths found.");
         return;
       }
 
-      foreach (var path in paths.Take(5)) {
+      int count = 0;
+      foreach (var kvp in pathDict) {
+        if (count++ >= 5)
+          break;
+
+        var path = kvp.Value;
         sb.AppendLine("```");
-        sb.AppendLine(string.Join(" → ", path));
+        sb.AppendLine(string.Join(" -> ", path.Select(n => n.Name)));
         sb.AppendLine("```");
         sb.AppendLine();
       }
