@@ -1,0 +1,45 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+# C# formatting
+csharp_new_line_before_open_brace = none
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# Prefer braces on same line
+csharp_prefer_braces = when_multiline
+
+[*.meta]
+end_of_line = lf
+
+[*.asmdef]
+end_of_line = lf
+
+[*.json]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+[*.{uxml,uss}]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+[*.yml]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+[*.md]
+trim_trailing_whitespace = false
