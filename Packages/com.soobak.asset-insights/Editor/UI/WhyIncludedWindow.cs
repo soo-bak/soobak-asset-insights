@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -8,7 +9,7 @@ namespace Soobak.AssetInsights {
     string _targetAsset;
     DependencyGraph _graph;
     IReportExporter _exporter;
-    List<List<string>> _paths;
+    Dictionary<string, List<AssetNodeModel>> _pathDict;
 
     ScrollView _pathsContainer;
     Label _titleLabel;
@@ -65,7 +66,8 @@ namespace Soobak.AssetInsights {
       if (_graph == null || string.IsNullOrEmpty(_targetAsset))
         return;
 
-      _paths = PathFinder.FindWhyIncluded(_graph, _targetAsset);
+      var roots = _graph.Nodes.Keys.Where(k => _graph.GetDependents(k).Count == 0);
+      _pathDict = PathFinder.FindWhyIncluded(_graph, roots, _targetAsset);
 
       if (_titleLabel != null)
         _titleLabel.text = $"Why is '{System.IO.Path.GetFileName(_targetAsset)}' included?";
@@ -75,25 +77,26 @@ namespace Soobak.AssetInsights {
 
       _pathsContainer.Clear();
 
-      if (_paths.Count == 0) {
+      if (_pathDict.Count == 0) {
         var noPathLabel = new Label("No dependency paths found. This asset may be a root asset.");
         noPathLabel.style.color = new Color(0.6f, 0.6f, 0.6f);
         _pathsContainer.Add(noPathLabel);
         return;
       }
 
-      var summaryLabel = new Label($"Found {_paths.Count} dependency path(s):");
+      var summaryLabel = new Label($"Found {_pathDict.Count} dependency path(s):");
       summaryLabel.style.marginBottom = 8;
       _pathsContainer.Add(summaryLabel);
 
-      for (int i = 0; i < _paths.Count; i++) {
-        var path = _paths[i];
-        var pathContainer = CreatePathElement(i + 1, path);
+      int index = 0;
+      foreach (var kvp in _pathDict) {
+        var path = kvp.Value;
+        var pathContainer = CreatePathElement(++index, path);
         _pathsContainer.Add(pathContainer);
       }
     }
 
-    VisualElement CreatePathElement(int index, List<string> path) {
+    VisualElement CreatePathElement(int index, List<AssetNodeModel> path) {
       var container = new VisualElement();
       container.style.marginBottom = 12;
       container.style.paddingLeft = 8;
@@ -112,7 +115,7 @@ namespace Soobak.AssetInsights {
       container.Add(header);
 
       for (int i = 0; i < path.Count; i++) {
-        var assetPath = path[i];
+        var node = path[i];
         var isLast = i == path.Count - 1;
 
         var itemContainer = new VisualElement();
@@ -125,7 +128,8 @@ namespace Soobak.AssetInsights {
         arrow.style.color = new Color(0.5f, 0.5f, 0.5f);
         itemContainer.Add(arrow);
 
-        var assetName = System.IO.Path.GetFileName(assetPath);
+        var assetPath = node.Path;
+        var assetName = node.Name + node.Extension;
         var button = new Button(() => PingAsset(assetPath)) { text = assetName };
         button.style.backgroundColor = Color.clear;
         button.style.borderTopWidth = 0;
