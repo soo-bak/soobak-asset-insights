@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Acquire Unity License
+
+on:
+  workflow_dispatch:
+
+jobs:
+  request-alf:
+    name: Request Activation File
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request .alf file
+        id: alf
+        uses: game-ci/unity-request-activation-file@v2
+        with:
+          unityVersion: 2021.3.0f1
+
+      - name: Upload .alf artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Unity_v2021.3.0f1.alf
+          path: ${{ steps.alf.outputs.filePath }}
