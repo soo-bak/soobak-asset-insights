@@ -1,0 +1,20 @@
+{
+  "name": "Soobak.AssetInsights.UI",
+  "rootNamespace": "Soobak.AssetInsights",
+  "references": [
+    "Soobak.AssetInsights.Editor",
+    "Soobak.AssetInsights.Services",
+    "Unity.EditorCoroutines.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
