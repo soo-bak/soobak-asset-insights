@@ -2,7 +2,8 @@
   "name": "Soobak.AssetInsights.Editor.Tests",
   "rootNamespace": "Soobak.AssetInsights.Tests",
   "references": [
-    "Soobak.AssetInsights.Editor"
+    "Soobak.AssetInsights.Editor",
+    "Soobak.AssetInsights.Services"
   ],
   "includePlatforms": [
     "Editor"
