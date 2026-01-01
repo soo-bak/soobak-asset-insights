@@ -272,10 +272,25 @@ namespace Soobak.AssetInsights {
       if (result.TotalUnusedCount == 0) {
         section.Add(CreateEmptyMessage("No unused assets found"));
       } else {
+        // Summary row with delete button
+        var summaryRow = new VisualElement();
+        summaryRow.style.flexDirection = FlexDirection.Row;
+        summaryRow.style.alignItems = Align.Center;
+        summaryRow.style.marginBottom = 8;
+
         var summary = new Label($"Total wasted space: {AssetNodeModel.FormatBytes(result.TotalUnusedSize)}");
-        summary.style.marginBottom = 8;
         summary.style.color = new Color(1f, 0.6f, 0.4f);
-        section.Add(summary);
+        summary.style.flexGrow = 1;
+        summaryRow.Add(summary);
+
+        var deleteAllBtn = new Button(() => DeleteUnusedAssets(result.UnusedAssets.ToList()));
+        deleteAllBtn.text = $"Delete All ({result.TotalUnusedCount})";
+        deleteAllBtn.style.backgroundColor = new Color(0.6f, 0.2f, 0.2f);
+        deleteAllBtn.style.paddingLeft = 12;
+        deleteAllBtn.style.paddingRight = 12;
+        summaryRow.Add(deleteAllBtn);
+
+        section.Add(summaryRow);
 
         var shown = 0;
         foreach (var info in result.UnusedAssets.Take(20)) {
@@ -312,6 +327,66 @@ namespace Soobak.AssetInsights {
       }
 
       _scrollView.Add(section);
+    }
+
+    void DeleteUnusedAssets(List<UnusedAssetInfo> assets) {
+      if (assets.Count == 0)
+        return;
+
+      var totalSize = assets.Sum(a => a.SizeBytes);
+      var message = $"Delete {assets.Count} unused assets?\n\nTotal size: {AssetNodeModel.FormatBytes(totalSize)}\n\nThis action cannot be undone.";
+
+      var result = EditorUtility.DisplayDialogComplex(
+        "Delete Unused Assets",
+        message,
+        "Delete",
+        "Cancel",
+        "Move to Trash"
+      );
+
+      if (result == 1) // Cancel
+        return;
+
+      bool moveToTrash = result == 2;
+      int deletedCount = 0;
+      int failedCount = 0;
+
+      AssetDatabase.StartAssetEditing();
+      try {
+        foreach (var asset in assets) {
+          bool success;
+          if (moveToTrash) {
+            success = AssetDatabase.MoveAssetToTrash(asset.Path);
+          } else {
+            success = AssetDatabase.DeleteAsset(asset.Path);
+          }
+
+          if (success) {
+            deletedCount++;
+            _graph.RemoveNode(asset.Path);
+          } else {
+            failedCount++;
+          }
+        }
+      } finally {
+        AssetDatabase.StopAssetEditing();
+        AssetDatabase.Refresh();
+      }
+
+      // Invalidate and refresh
+      InvalidateCache();
+      Refresh();
+
+      // Show result
+      string resultMessage = moveToTrash
+        ? $"Moved {deletedCount} asset(s) to trash."
+        : $"Deleted {deletedCount} asset(s).";
+
+      if (failedCount > 0) {
+        resultMessage += $"\n{failedCount} asset(s) failed to delete.";
+      }
+
+      EditorUtility.DisplayDialog("Delete Complete", resultMessage, "OK");
     }
 
     void AddOptimizationIssuesSection() {

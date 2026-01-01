@@ -34,10 +34,13 @@ namespace Soobak.AssetInsights {
     Button _scanButton;
     Button _cancelButton;
     Button _exportButton;
+    Button _deleteButton;
+    Label _selectionLabel;
     AssetPreviewPanel _previewPanel;
     FilterPanel _filterPanel;
     Button _filterToggleButton;
     bool _filterVisible;
+    List<AssetNodeModel> _selectedNodes = new();
 
     // Cached analysis data for filtering
     HashSet<string> _unusedAssets;
@@ -92,6 +95,10 @@ namespace Soobak.AssetInsights {
       // Clear filtered nodes list
       _filteredNodes?.Clear();
       _filteredNodes = null;
+
+      // Clear selection
+      _selectedNodes?.Clear();
+      _selectedNodes = null;
     }
 
     void CreateGUI() {
@@ -375,7 +382,7 @@ namespace Soobak.AssetInsights {
       _assetList.style.flexGrow = 1;
       _assetList.style.flexShrink = 1;
       _assetList.style.minHeight = 100;
-      _assetList.selectionType = SelectionType.Single;
+      _assetList.selectionType = SelectionType.Multiple;
       _assetList.makeItem = MakeAssetItem;
       _assetList.bindItem = BindAssetItem;
       _assetList.fixedItemHeight = 36;
@@ -385,9 +392,31 @@ namespace Soobak.AssetInsights {
     }
 
     void CreateExportSection() {
+      // Selection info row
+      var selectionRow = new VisualElement();
+      selectionRow.style.flexDirection = FlexDirection.Row;
+      selectionRow.style.alignItems = Align.Center;
+      selectionRow.style.marginTop = 8;
+      selectionRow.style.flexShrink = 0;
+
+      _selectionLabel = new Label();
+      _selectionLabel.style.flexGrow = 1;
+      _selectionLabel.style.color = new Color(0.7f, 0.8f, 1f);
+      _selectionLabel.style.fontSize = 11;
+      selectionRow.Add(_selectionLabel);
+
+      _deleteButton = new Button(DeleteSelectedAssets) { text = "Delete Selected" };
+      _deleteButton.style.width = 110;
+      _deleteButton.style.backgroundColor = new Color(0.6f, 0.2f, 0.2f);
+      _deleteButton.SetEnabled(false);
+      selectionRow.Add(_deleteButton);
+
+      _root.Add(selectionRow);
+
+      // Export buttons row
       var container = new VisualElement();
       container.style.flexDirection = FlexDirection.Row;
-      container.style.marginTop = 8;
+      container.style.marginTop = 4;
       container.style.flexShrink = 0;
       container.style.minHeight = 24;
 
@@ -401,6 +430,82 @@ namespace Soobak.AssetInsights {
       container.Add(heavyButton);
 
       _root.Add(container);
+    }
+
+    void DeleteSelectedAssets() {
+      if (_selectedNodes.Count == 0)
+        return;
+
+      var count = _selectedNodes.Count;
+      var totalSize = _selectedNodes.Sum(n => n.SizeBytes);
+
+      // Build confirmation message
+      string message;
+      if (count == 1) {
+        message = $"Delete \"{_selectedNodes[0].Name}\"?\n\nSize: {AssetNodeModel.FormatBytes(totalSize)}";
+      } else {
+        message = $"Delete {count} selected assets?\n\nTotal size: {AssetNodeModel.FormatBytes(totalSize)}";
+      }
+
+      // Show confirmation with warning
+      var result = EditorUtility.DisplayDialogComplex(
+        "Delete Assets",
+        message + "\n\nThis action cannot be undone.",
+        "Delete",
+        "Cancel",
+        "Move to Trash"
+      );
+
+      if (result == 1) // Cancel
+        return;
+
+      bool moveToTrash = result == 2;
+      var paths = _selectedNodes.Select(n => n.Path).ToList();
+      int deletedCount = 0;
+      int failedCount = 0;
+
+      AssetDatabase.StartAssetEditing();
+      try {
+        foreach (var path in paths) {
+          bool success;
+          if (moveToTrash) {
+            success = AssetDatabase.MoveAssetToTrash(path);
+          } else {
+            success = AssetDatabase.DeleteAsset(path);
+          }
+
+          if (success) {
+            deletedCount++;
+            // Remove from graph
+            _scanner.Graph.RemoveNode(path);
+          } else {
+            failedCount++;
+          }
+        }
+      } finally {
+        AssetDatabase.StopAssetEditing();
+        AssetDatabase.Refresh();
+      }
+
+      // Clear selection
+      _selectedNodes.Clear();
+      _assetList.ClearSelection();
+
+      // Invalidate caches and refresh
+      _cachedHealthResult = null;
+      _dashboardPanel?.InvalidateCache();
+      RefreshAssetList();
+
+      // Show result
+      string resultMessage = moveToTrash
+        ? $"Moved {deletedCount} asset(s) to trash."
+        : $"Deleted {deletedCount} asset(s).";
+
+      if (failedCount > 0) {
+        resultMessage += $"\n{failedCount} asset(s) failed to delete.";
+      }
+
+      EditorUtility.DisplayDialog("Delete Complete", resultMessage, "OK");
     }
 
     VisualElement MakeAssetItem() {
@@ -541,17 +646,41 @@ namespace Soobak.AssetInsights {
 
     void OnAssetSelected(IEnumerable<object> selection) {
       _selectedAssetPath = null;
+      _selectedNodes.Clear();
 
       foreach (var item in selection) {
         if (item is AssetNodeModel node) {
-          _selectedAssetPath = node.Path;
-          EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<Object>(node.Path));
-          break;
+          _selectedNodes.Add(node);
+          if (_selectedAssetPath == null) {
+            _selectedAssetPath = node.Path;
+          }
         }
+      }
+
+      // Ping the first selected item
+      if (!string.IsNullOrEmpty(_selectedAssetPath)) {
+        EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<Object>(_selectedAssetPath));
       }
 
       _showGraphButton?.SetEnabled(!string.IsNullOrEmpty(_selectedAssetPath));
       _previewPanel?.ShowAsset(_selectedAssetPath);
+      UpdateSelectionUI();
+    }
+
+    void UpdateSelectionUI() {
+      var count = _selectedNodes.Count;
+      var totalSize = _selectedNodes.Sum(n => n.SizeBytes);
+
+      if (count == 0) {
+        _selectionLabel.text = "";
+        _deleteButton?.SetEnabled(false);
+      } else if (count == 1) {
+        _selectionLabel.text = $"1 selected ({AssetNodeModel.FormatBytes(totalSize)})";
+        _deleteButton?.SetEnabled(true);
+      } else {
+        _selectionLabel.text = $"{count} selected ({AssetNodeModel.FormatBytes(totalSize)})";
+        _deleteButton?.SetEnabled(true);
+      }
     }
 
     void StartScan() {

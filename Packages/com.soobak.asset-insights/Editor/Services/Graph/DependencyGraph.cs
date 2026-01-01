@@ -52,6 +52,40 @@ namespace Soobak.AssetInsights {
       return _nodes.ContainsKey(path);
     }
 
+    public bool RemoveNode(string path) {
+      if (string.IsNullOrEmpty(path) || !_nodes.ContainsKey(path))
+        return false;
+
+      // Remove from forward edges (this node's dependencies)
+      if (_forward.TryGetValue(path, out var dependencies)) {
+        foreach (var dep in dependencies) {
+          if (_reverse.TryGetValue(dep, out var depRefs)) {
+            depRefs.Remove(path);
+            if (_nodes.TryGetValue(dep, out var depNode)) {
+              depNode.DependentCount = depRefs.Count;
+            }
+          }
+        }
+        _forward.Remove(path);
+      }
+
+      // Remove from reverse edges (nodes that depend on this)
+      if (_reverse.TryGetValue(path, out var dependents)) {
+        foreach (var dep in dependents) {
+          if (_forward.TryGetValue(dep, out var depDeps)) {
+            depDeps.Remove(path);
+            if (_nodes.TryGetValue(dep, out var depNode)) {
+              depNode.DependencyCount = depDeps.Count;
+            }
+          }
+        }
+        _reverse.Remove(path);
+      }
+
+      // Remove the node itself
+      return _nodes.Remove(path);
+    }
+
     public IReadOnlyCollection<string> GetDependencies(string path) {
       if (_forward.TryGetValue(path, out var deps))
         return deps;
