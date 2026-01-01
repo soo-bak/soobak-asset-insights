@@ -59,8 +59,9 @@ namespace Soobak.AssetInsights {
         .GroupBy(i => i.Severity)
         .ToDictionary(g => g.Key, g => g.Count());
 
-      // Release memory after heavy analysis
-      EditorUtility.UnloadUnusedAssetsImmediate();
+      // Note: Removed EditorUtility.UnloadUnusedAssetsImmediate() as it's
+      // an extremely heavy synchronous operation that causes UI freezes.
+      // Let Unity's normal GC handle memory cleanup instead.
 
       _cachedReport = report;
       return report;

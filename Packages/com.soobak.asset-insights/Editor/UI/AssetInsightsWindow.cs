@@ -600,31 +600,39 @@ namespace Soobak.AssetInsights {
 
       // Run analysis after scan (delayed to allow UI update)
       EditorApplication.delayCall += () => {
-        var calculator = new HealthScoreCalculator(graph);
-        _cachedHealthResult = calculator.Calculate();
+        // Run each analyzer ONCE and reuse results everywhere
+        // This prevents the massive performance overhead of duplicate analysis
 
-        // Cache analysis data for filtering
+        // 1. Run UnusedAssetAnalyzer once
         var unusedAnalyzer = new UnusedAssetAnalyzer(graph);
         var unusedResult = unusedAnalyzer.Analyze();
         _unusedAssets = unusedResult.UnusedAssets.Select(a => a.Path).ToHashSet();
 
+        // 2. Run CircularDependencyDetector once
         var circularDetector = new CircularDependencyDetector(graph);
         var circularResult = circularDetector.Detect();
         _circularAssets = circularResult.AssetsInCycles;
 
-        // Build inclusion analysis
+        // 3. Run OptimizationEngine once
+        _cachedOptimizationEngine = new OptimizationEngine(graph);
+        var optimizationReport = _cachedOptimizationEngine.Analyze();
+
+        // 4. Calculate health score using pre-computed results (no duplicate analysis)
+        var calculator = new HealthScoreCalculator(graph);
+        calculator.SetPrecomputedResults(unusedResult, circularResult, optimizationReport);
+        _cachedHealthResult = calculator.Calculate();
+
+        // 5. Build inclusion analysis (unique, not duplicated elsewhere)
         _buildAnalyzer = new BuildInclusionAnalyzer(graph);
         _buildAnalyzer.Analyze();
 
-        // Cache optimization engine for filtering and preview panel
-        _cachedOptimizationEngine = new OptimizationEngine(graph);
-        _cachedOptimizationEngine.Analyze();
-
-        // Share cached engine with preview panel to avoid duplicate creation
+        // Share cached engine with preview panel
         _previewPanel?.SetOptimizationEngine(_cachedOptimizationEngine);
 
-        // Share cached data with dashboard panel
-        _dashboardPanel?.SetCachedAnalysisData(_cachedOptimizationEngine, _unusedAssets, _circularAssets);
+        // Share cached data with dashboard panel (results, not just assets)
+        _dashboardPanel?.SetCachedAnalysisData(
+          _cachedOptimizationEngine, _unusedAssets, _circularAssets,
+          unusedResult, circularResult);
 
         _progressBar.title = $"Complete - {graph.NodeCount} assets ({AssetNodeModel.FormatBytes(graph.GetTotalSize())})";
         _statusLabel.text = $"Health: {_cachedHealthResult.Grade} ({_cachedHealthResult.Score}/100)";

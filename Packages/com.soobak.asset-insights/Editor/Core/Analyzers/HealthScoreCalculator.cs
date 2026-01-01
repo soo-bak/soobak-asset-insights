@@ -12,17 +12,34 @@ namespace Soobak.AssetInsights {
     const int LargeAssetPenalty = 1;
     const long LargeAssetThreshold = 10 * 1024 * 1024; // 10 MB
 
+    // Pre-computed results to avoid duplicate analysis
+    UnusedAssetResult _unusedResult;
+    CircularDependencyResult _circularResult;
+    OptimizationReport _optimizationReport;
+
     public HealthScoreCalculator(DependencyGraph graph) {
       _graph = graph;
+    }
+
+    /// <summary>
+    /// Set pre-computed analysis results to avoid duplicate expensive operations.
+    /// Call this before Calculate() if results are already available.
+    /// </summary>
+    public void SetPrecomputedResults(
+      UnusedAssetResult unusedResult,
+      CircularDependencyResult circularResult,
+      OptimizationReport optimizationReport) {
+      _unusedResult = unusedResult;
+      _circularResult = circularResult;
+      _optimizationReport = optimizationReport;
     }
 
     public HealthScoreResult Calculate() {
       var result = new HealthScoreResult();
       var totalPenalty = 0;
 
-      // Analyze unused assets
-      var unusedAnalyzer = new UnusedAssetAnalyzer(_graph);
-      var unusedResult = unusedAnalyzer.Analyze();
+      // Use pre-computed or run analysis (only if not already provided)
+      var unusedResult = _unusedResult ?? new UnusedAssetAnalyzer(_graph).Analyze();
       result.UnusedAssetCount = unusedResult.TotalUnusedCount;
       result.UnusedAssetSize = unusedResult.TotalUnusedSize;
       totalPenalty += unusedResult.TotalUnusedCount * UnusedAssetPenalty;
@@ -33,9 +50,8 @@ namespace Soobak.AssetInsights {
         Description = $"{unusedResult.TotalUnusedCount} unused assets ({AssetNodeModel.FormatBytes(unusedResult.TotalUnusedSize)})"
       });
 
-      // Analyze circular dependencies
-      var circularDetector = new CircularDependencyDetector(_graph);
-      var circularResult = circularDetector.Detect();
+      // Use pre-computed or run circular detection
+      var circularResult = _circularResult ?? new CircularDependencyDetector(_graph).Detect();
       result.CircularDependencyCount = circularResult.TotalCycles;
       totalPenalty += circularResult.TotalCycles * CircularDependencyPenalty;
       result.Breakdown.Add(new ScoreBreakdownItem {
@@ -45,9 +61,8 @@ namespace Soobak.AssetInsights {
         Description = $"{circularResult.TotalCycles} circular dependency cycles"
       });
 
-      // Analyze optimization opportunities
-      var optimizationEngine = new OptimizationEngine(_graph);
-      var optimizationReport = optimizationEngine.Analyze();
+      // Use pre-computed or run optimization analysis
+      var optimizationReport = _optimizationReport ?? new OptimizationEngine(_graph).Analyze();
       result.OptimizationWarnings = optimizationReport.WarningCount;
       result.OptimizationErrors = optimizationReport.ErrorCount;
       result.PotentialSavings = optimizationReport.TotalPotentialSavings;

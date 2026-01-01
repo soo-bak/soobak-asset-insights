@@ -30,10 +30,18 @@ namespace Soobak.AssetInsights {
     /// <summary>
     /// Set cached analysis data from parent window to avoid duplicate computation.
     /// </summary>
-    public void SetCachedAnalysisData(OptimizationEngine engine, HashSet<string> unusedAssets, HashSet<string> circularAssets) {
+    public void SetCachedAnalysisData(
+      OptimizationEngine engine,
+      HashSet<string> unusedAssets,
+      HashSet<string> circularAssets,
+      UnusedAssetResult unusedResult = null,
+      CircularDependencyResult circularResult = null) {
       _cachedOptimizationEngine = engine;
+      _cachedOptimizationReport = engine?.LastReport;
       _cachedUnusedAssets = unusedAssets;
       _cachedCircularAssets = circularAssets;
+      _cachedUnusedResult = unusedResult;
+      _cachedCircularResult = circularResult;
       _hasExternalCache = true;
     }
 
@@ -75,43 +83,42 @@ namespace Soobak.AssetInsights {
 
       _analysisDirty = false;
 
-      // Use cached engine from parent if available, otherwise create new one
-      OptimizationEngine engine;
-      if (_cachedOptimizationEngine != null) {
-        engine = _cachedOptimizationEngine;
-        // Use cached report if engine already analyzed, otherwise analyze now
-        _cachedOptimizationReport = engine.LastReport ?? engine.Analyze();
-      } else {
-        engine = new OptimizationEngine(_graph);
-        _cachedOptimizationReport = engine.Analyze();
-        _cachedOptimizationEngine = engine;
+      // When external cache is available from parent window, prefer it completely.
+      // This prevents duplicate expensive analysis operations.
+
+      // Optimization analysis - use cached if available
+      if (_cachedOptimizationReport == null) {
+        if (_cachedOptimizationEngine != null) {
+          _cachedOptimizationReport = _cachedOptimizationEngine.LastReport ?? _cachedOptimizationEngine.Analyze();
+        } else {
+          var engine = new OptimizationEngine(_graph);
+          _cachedOptimizationReport = engine.Analyze();
+          _cachedOptimizationEngine = engine;
+        }
       }
 
-      // Unused analysis - reuse if available from parent
+      // Unused analysis - only run if not provided by parent
       if (_cachedUnusedResult == null) {
         var unusedAnalyzer = new UnusedAssetAnalyzer(_graph);
         _cachedUnusedResult = unusedAnalyzer.Analyze();
       }
 
-      // Circular dependency detection
+      // Circular dependency detection - only run if not provided by parent
       if (_cachedCircularResult == null) {
         var detector = new CircularDependencyDetector(_graph);
         _cachedCircularResult = detector.Detect();
       }
 
-      // Resources.Load detection
+      // Resources.Load detection (lightweight, always run if needed)
       if (_cachedResourcesResult == null) {
         var resourcesDetector = new ResourcesLoadDetector(_graph);
         _cachedResourcesResult = resourcesDetector.Detect();
       }
 
-      // Duplicate detection
+      // Duplicate detection (lightweight in-memory grouping)
       if (_cachedDuplicates == null) {
         _cachedDuplicates = FindDuplicatesInternal();
       }
-
-      // Note: Removed EditorUtility.UnloadUnusedAssetsImmediate() as it's extremely heavy
-      // and was causing UI freezes. Let Unity's normal GC handle memory cleanup.
     }
 
     public void Refresh() {
