@@ -22,6 +22,11 @@ namespace Soobak.AssetInsights {
     bool _analysisDirty = true;
     bool _hasExternalCache;
 
+    // Expansion state for "Show More" functionality
+    Dictionary<string, bool> _expandedSections = new();
+    const int InitialItemCount = 20;
+    const int ExpandedItemCount = 100;
+
     public DashboardPanel(DependencyGraph graph) {
       _graph = graph;
       BuildUI();
@@ -292,8 +297,11 @@ namespace Soobak.AssetInsights {
 
         section.Add(summaryRow);
 
+        var isExpanded = _expandedSections.GetValueOrDefault("unused", false);
+        var showCount = isExpanded ? ExpandedItemCount : InitialItemCount;
+
         var shown = 0;
-        foreach (var info in result.UnusedAssets.Take(20)) {
+        foreach (var info in result.UnusedAssets.Take(showCount)) {
           var row = CreateClickableRow(info.Path);
 
           var icon = new Image();
@@ -319,10 +327,9 @@ namespace Soobak.AssetInsights {
         }
 
         if (result.TotalUnusedCount > shown) {
-          var more = new Label($"... and {result.TotalUnusedCount - shown} more");
-          more.style.color = new Color(0.5f, 0.5f, 0.5f);
-          more.style.marginTop = 4;
-          section.Add(more);
+          section.Add(CreateShowMoreLabel("unused", result.TotalUnusedCount - shown));
+        } else if (isExpanded && result.TotalUnusedCount > InitialItemCount) {
+          section.Add(CreateShowLessLabel("unused"));
         }
       }
 
@@ -440,7 +447,11 @@ namespace Soobak.AssetInsights {
           section.Add(fixAllRow);
         }
 
-        foreach (var issue in report.Issues.Take(20)) {
+        var isExpanded = _expandedSections.GetValueOrDefault("optimization", false);
+        var showCount = isExpanded ? ExpandedItemCount : InitialItemCount;
+        var shown = 0;
+
+        foreach (var issue in report.Issues.Take(showCount)) {
           var row = CreateClickableRow(issue.AssetPath);
           row.style.flexDirection = FlexDirection.Column;
           row.style.alignItems = Align.Stretch;
@@ -495,13 +506,13 @@ namespace Soobak.AssetInsights {
           row.Add(recLabel);
 
           section.Add(row);
+          shown++;
         }
 
-        if (report.TotalIssues > 20) {
-          var more = new Label($"... and {report.TotalIssues - 20} more issues");
-          more.style.color = new Color(0.5f, 0.5f, 0.5f);
-          more.style.marginTop = 4;
-          section.Add(more);
+        if (report.TotalIssues > shown) {
+          section.Add(CreateShowMoreLabel("optimization", report.TotalIssues - shown));
+        } else if (isExpanded && report.TotalIssues > InitialItemCount) {
+          section.Add(CreateShowLessLabel("optimization"));
         }
       }
 
@@ -545,8 +556,11 @@ namespace Soobak.AssetInsights {
       if (result.TotalCycles == 0) {
         section.Add(CreateEmptyMessage("No circular dependencies found"));
       } else {
+        var isExpanded = _expandedSections.GetValueOrDefault("circular", false);
+        var showCount = isExpanded ? 30 : 10; // Cycles are larger, show fewer
         var shown = 0;
-        foreach (var cycle in result.Cycles.Take(10)) {
+
+        foreach (var cycle in result.Cycles.Take(showCount)) {
           var cycleContainer = new VisualElement();
           cycleContainer.style.marginBottom = 12;
           cycleContainer.style.paddingTop = 8;
@@ -636,10 +650,9 @@ namespace Soobak.AssetInsights {
         }
 
         if (result.TotalCycles > shown) {
-          var more = new Label($"... and {result.TotalCycles - shown} more cycles");
-          more.style.color = new Color(0.5f, 0.5f, 0.5f);
-          more.style.marginTop = 4;
-          section.Add(more);
+          section.Add(CreateShowMoreLabel("circular", result.TotalCycles - shown));
+        } else if (isExpanded && result.TotalCycles > 10) {
+          section.Add(CreateShowLessLabel("circular"));
         }
       }
 
@@ -664,7 +677,11 @@ namespace Soobak.AssetInsights {
       if (duplicates.Count == 0) {
         section.Add(CreateEmptyMessage("No duplicate assets found"));
       } else {
-        foreach (var group in duplicates.Take(10)) {
+        var isExpanded = _expandedSections.GetValueOrDefault("duplicates", false);
+        var showCount = isExpanded ? 30 : 10;
+        var shown = 0;
+
+        foreach (var group in duplicates.Take(showCount)) {
           var groupContainer = new VisualElement();
           groupContainer.style.marginBottom = 8;
           groupContainer.style.paddingLeft = 8;
@@ -695,13 +712,13 @@ namespace Soobak.AssetInsights {
           }
 
           section.Add(groupContainer);
+          shown++;
         }
 
-        if (duplicates.Count > 10) {
-          var more = new Label($"... and {duplicates.Count - 10} more duplicate groups");
-          more.style.color = new Color(0.5f, 0.5f, 0.5f);
-          more.style.marginTop = 4;
-          section.Add(more);
+        if (duplicates.Count > shown) {
+          section.Add(CreateShowMoreLabel("duplicates", duplicates.Count - shown));
+        } else if (isExpanded && duplicates.Count > 10) {
+          section.Add(CreateShowLessLabel("duplicates"));
         }
       }
 
@@ -751,8 +768,11 @@ namespace Soobak.AssetInsights {
         section.Add(summaryRow);
 
         // Show references
+        var isExpanded = _expandedSections.GetValueOrDefault("resources", false);
+        var showCount = isExpanded ? 50 : 15;
         var shown = 0;
-        foreach (var reference in result.References.Take(15)) {
+
+        foreach (var reference in result.References.Take(showCount)) {
           var refContainer = new VisualElement();
           refContainer.style.marginBottom = 6;
           refContainer.style.paddingLeft = 8;
@@ -798,10 +818,9 @@ namespace Soobak.AssetInsights {
         }
 
         if (result.TotalReferences > shown) {
-          var more = new Label($"... and {result.TotalReferences - shown} more");
-          more.style.color = new Color(0.5f, 0.5f, 0.5f);
-          more.style.marginTop = 4;
-          section.Add(more);
+          section.Add(CreateShowMoreLabel("resources", result.TotalReferences - shown));
+        } else if (isExpanded && result.TotalReferences > 15) {
+          section.Add(CreateShowLessLabel("resources"));
         }
       }
 
@@ -885,6 +904,71 @@ namespace Soobak.AssetInsights {
       label.style.color = new Color(0.4f, 0.7f, 0.4f);
       label.style.unityFontStyleAndWeight = FontStyle.Italic;
       return label;
+    }
+
+    VisualElement CreateShowMoreLabel(string sectionKey, int remaining) {
+      var container = new VisualElement();
+      container.style.flexDirection = FlexDirection.Row;
+      container.style.alignItems = Align.Center;
+      container.style.marginTop = 4;
+      container.style.paddingTop = 4;
+      container.style.paddingBottom = 4;
+      container.style.paddingLeft = 4;
+      container.style.borderTopLeftRadius = 3;
+      container.style.borderTopRightRadius = 3;
+      container.style.borderBottomLeftRadius = 3;
+      container.style.borderBottomRightRadius = 3;
+
+      var label = new Label($"Show {remaining} more...");
+      label.style.color = new Color(0.5f, 0.7f, 1f);
+      label.style.unityFontStyleAndWeight = FontStyle.Bold;
+      label.style.fontSize = 11;
+      container.Add(label);
+
+      container.RegisterCallback<MouseEnterEvent>(e => {
+        container.style.backgroundColor = new Color(0.25f, 0.25f, 0.3f);
+      });
+      container.RegisterCallback<MouseLeaveEvent>(e => {
+        container.style.backgroundColor = StyleKeyword.Null;
+      });
+      container.RegisterCallback<ClickEvent>(e => {
+        _expandedSections[sectionKey] = true;
+        Refresh();
+      });
+
+      return container;
+    }
+
+    VisualElement CreateShowLessLabel(string sectionKey) {
+      var container = new VisualElement();
+      container.style.flexDirection = FlexDirection.Row;
+      container.style.alignItems = Align.Center;
+      container.style.marginTop = 4;
+      container.style.paddingTop = 4;
+      container.style.paddingBottom = 4;
+      container.style.paddingLeft = 4;
+      container.style.borderTopLeftRadius = 3;
+      container.style.borderTopRightRadius = 3;
+      container.style.borderBottomLeftRadius = 3;
+      container.style.borderBottomRightRadius = 3;
+
+      var label = new Label("Show less");
+      label.style.color = new Color(0.6f, 0.6f, 0.6f);
+      label.style.fontSize = 11;
+      container.Add(label);
+
+      container.RegisterCallback<MouseEnterEvent>(e => {
+        container.style.backgroundColor = new Color(0.25f, 0.25f, 0.25f);
+      });
+      container.RegisterCallback<MouseLeaveEvent>(e => {
+        container.style.backgroundColor = StyleKeyword.Null;
+      });
+      container.RegisterCallback<ClickEvent>(e => {
+        _expandedSections[sectionKey] = false;
+        Refresh();
+      });
+
+      return container;
     }
 
     Color GetTypeColor(AssetType type) {
