@@ -204,7 +204,7 @@ namespace Soobak.AssetInsights {
       if (settings.WhitelistedPaths.Count == 0) {
         var empty = new Label("(none)");
         empty.style.color = new Color(0.5f, 0.5f, 0.5f);
-        empty.style.fontStyleAndWeight = FontStyle.Italic;
+        empty.style.unityFontStyleAndWeight = FontStyle.Italic;
         listContainer.Add(empty);
       }
 

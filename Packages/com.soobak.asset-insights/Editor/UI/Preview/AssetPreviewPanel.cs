@@ -215,7 +215,7 @@ namespace Soobak.AssetInsights {
       if (paths.Count == 0) {
         var empty = new Label("None");
         empty.style.color = new Color(0.5f, 0.5f, 0.5f);
-        empty.style.fontStyleAndWeight = FontStyle.Italic;
+        empty.style.unityFontStyleAndWeight = FontStyle.Italic;
         empty.style.fontSize = 10;
         section.Add(empty);
       } else {
