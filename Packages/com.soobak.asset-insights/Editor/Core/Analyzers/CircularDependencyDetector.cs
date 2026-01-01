@@ -128,8 +128,50 @@ namespace Soobak.AssetInsights {
     public int CycleSize { get; set; }
     public bool IsSelfReference { get; set; }
 
+    /// <summary>
+    /// Returns the cycle path in actual dependency order.
+    /// Each element depends on (references) the next element.
+    /// </summary>
+    public List<string> GetOrderedCyclePath(DependencyGraph graph) {
+      if (AssetPaths.Count <= 1)
+        return AssetPaths;
+
+      var sccSet = AssetPaths.ToHashSet();
+      var visited = new HashSet<string>();
+      var path = new List<string>();
+
+      // Start from first node and follow dependencies within SCC
+      var current = AssetPaths[0];
+      while (!visited.Contains(current)) {
+        visited.Add(current);
+        path.Add(current);
+
+        // Find next node in cycle (a dependency that's also in the SCC)
+        var deps = graph.GetDependencies(current);
+        var nextInCycle = deps.FirstOrDefault(d => sccSet.Contains(d) && !visited.Contains(d));
+
+        if (nextInCycle == null) {
+          // No unvisited nodes, find the one that closes the cycle
+          nextInCycle = deps.FirstOrDefault(d => sccSet.Contains(d));
+          if (nextInCycle != null && path.Count < AssetPaths.Count) {
+            // Try from a different starting point
+            break;
+          }
+          break;
+        }
+        current = nextInCycle;
+      }
+
+      // If we didn't get all nodes, just return original order
+      if (path.Count < AssetPaths.Count)
+        return AssetPaths;
+
+      return path;
+    }
+
     public string GetFormattedCycle(DependencyGraph graph) {
-      var names = AssetPaths.Select(p => {
+      var orderedPaths = GetOrderedCyclePath(graph);
+      var names = orderedPaths.Select(p => {
         if (graph.TryGetNode(p, out var node))
           return node.Name;
         return System.IO.Path.GetFileNameWithoutExtension(p);
@@ -138,7 +180,7 @@ namespace Soobak.AssetInsights {
       if (names.Count > 0)
         names.Add(names[0]); // Show cycle back to start
 
-      return string.Join(" -> ", names);
+      return string.Join(" → ", names);
     }
   }
 }

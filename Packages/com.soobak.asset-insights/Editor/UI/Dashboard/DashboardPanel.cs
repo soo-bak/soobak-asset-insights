@@ -310,28 +310,88 @@ namespace Soobak.AssetInsights {
       if (result.TotalCycles == 0) {
         section.Add(CreateEmptyMessage("No circular dependencies found"));
       } else {
-
         var shown = 0;
         foreach (var cycle in result.Cycles.Take(10)) {
           var cycleContainer = new VisualElement();
-          cycleContainer.style.marginBottom = 8;
-          cycleContainer.style.paddingLeft = 8;
-          cycleContainer.style.borderLeftWidth = 2;
-          cycleContainer.style.borderLeftColor = new Color(1f, 0.4f, 0.4f);
+          cycleContainer.style.marginBottom = 12;
+          cycleContainer.style.paddingTop = 8;
+          cycleContainer.style.paddingBottom = 8;
+          cycleContainer.style.paddingLeft = 12;
+          cycleContainer.style.paddingRight = 12;
+          cycleContainer.style.backgroundColor = new Color(0.15f, 0.12f, 0.12f);
+          cycleContainer.style.borderTopLeftRadius = 4;
+          cycleContainer.style.borderTopRightRadius = 4;
+          cycleContainer.style.borderBottomLeftRadius = 4;
+          cycleContainer.style.borderBottomRightRadius = 4;
 
-          for (int i = 0; i < cycle.AssetPaths.Count; i++) {
-            var path = cycle.AssetPaths[i];
+          // Get ordered cycle path
+          var orderedPaths = cycle.GetOrderedCyclePath(_graph);
+
+          // Show cycle chain visualization: A → B → C → A
+          var chainRow = new VisualElement();
+          chainRow.style.flexDirection = FlexDirection.Row;
+          chainRow.style.flexWrap = Wrap.Wrap;
+          chainRow.style.alignItems = Align.Center;
+          chainRow.style.marginBottom = 8;
+
+          for (int i = 0; i < orderedPaths.Count; i++) {
+            var path = orderedPaths[i];
+            var name = System.IO.Path.GetFileNameWithoutExtension(path);
+
+            var nameLabel = new Label(name);
+            nameLabel.style.color = new Color(1f, 0.7f, 0.7f);
+            nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            chainRow.Add(nameLabel);
+
+            // Add arrow (including closing arrow back to first)
+            var arrowLabel = new Label(" → ");
+            arrowLabel.style.color = new Color(1f, 0.4f, 0.4f);
+            chainRow.Add(arrowLabel);
+          }
+
+          // Add first name again to close the cycle
+          if (orderedPaths.Count > 0) {
+            var firstName = System.IO.Path.GetFileNameWithoutExtension(orderedPaths[0]);
+            var closeLabel = new Label(firstName);
+            closeLabel.style.color = new Color(1f, 0.7f, 0.7f);
+            closeLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            chainRow.Add(closeLabel);
+          }
+
+          cycleContainer.Add(chainRow);
+
+          // Show details for each asset in the cycle
+          for (int i = 0; i < orderedPaths.Count; i++) {
+            var path = orderedPaths[i];
+            var nextPath = orderedPaths[(i + 1) % orderedPaths.Count];
+
             var row = CreateClickableRow(path);
 
-            var arrow = new Label(i == 0 ? "●" : "↓");
-            arrow.style.width = 16;
-            arrow.style.color = new Color(1f, 0.4f, 0.4f);
-            row.Add(arrow);
+            var icon = new Image();
+            icon.image = AssetDatabase.GetCachedIcon(path);
+            icon.style.width = 14;
+            icon.style.height = 14;
+            icon.style.marginRight = 4;
+            row.Add(icon);
 
             var name = System.IO.Path.GetFileNameWithoutExtension(path);
             var nameLabel = new Label(name);
-            nameLabel.style.flexGrow = 1;
+            nameLabel.style.width = 120;
+            nameLabel.style.overflow = Overflow.Hidden;
+            nameLabel.style.textOverflow = TextOverflow.Ellipsis;
             row.Add(nameLabel);
+
+            var refLabel = new Label("references");
+            refLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
+            refLabel.style.fontSize = 10;
+            refLabel.style.marginLeft = 4;
+            refLabel.style.marginRight = 4;
+            row.Add(refLabel);
+
+            var nextName = System.IO.Path.GetFileNameWithoutExtension(nextPath);
+            var nextLabel = new Label(nextName);
+            nextLabel.style.color = new Color(0.8f, 0.6f, 0.6f);
+            row.Add(nextLabel);
 
             cycleContainer.Add(row);
           }
