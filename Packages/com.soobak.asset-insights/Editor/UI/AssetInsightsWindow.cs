@@ -191,8 +191,7 @@ namespace Soobak.AssetInsights {
       _graphTabButton.style.backgroundColor = view == 1 ? activeColor : StyleKeyword.Null;
       _dashboardTabButton.style.backgroundColor = view == 2 ? activeColor : StyleKeyword.Null;
 
-      if (view == 1 && !string.IsNullOrEmpty(_selectedAssetPath))
-        ShowAssetInGraph(_selectedAssetPath);
+      // Graph view: don't auto-show, wait for user action (button click)
 
       if (view == 2 && _cachedHealthResult != null)
         _dashboardPanel?.SetResult(_cachedHealthResult);

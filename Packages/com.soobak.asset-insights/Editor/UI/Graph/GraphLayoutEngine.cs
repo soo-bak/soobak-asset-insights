@@ -17,11 +17,8 @@ namespace Soobak.AssetInsights {
       if (nodes == null || nodes.Count == 0)
         return;
 
-      if (nodes.Count <= 10) {
-        ApplyRadialLayout(nodes, centerPath);
-      } else {
-        ApplyForceDirectedLayout(nodes, centerPath);
-      }
+      // Always use hierarchical layout for performance (O(n) vs O(n²))
+      ApplyHierarchicalLayout(nodes, centerPath);
     }
 
     void ApplyRadialLayout(List<AssetGraphNode> nodes, string centerPath) {
