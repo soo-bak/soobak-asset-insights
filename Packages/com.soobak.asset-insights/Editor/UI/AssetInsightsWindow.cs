@@ -83,7 +83,12 @@ namespace Soobak.AssetInsights {
       CleanupSearchDebounce();
       _filterPanel?.Cleanup();
       _previewPanel?.Cleanup();
-      _dashboardPanel?.Cleanup();
+
+      // Unsubscribe from dashboard events
+      if (_dashboardPanel != null) {
+        _dashboardPanel.OnNavigateToAsset -= NavigateToAssetInList;
+        _dashboardPanel.Cleanup();
+      }
 
       // Clear cached analysis data
       _cachedOptimizationEngine = null;
@@ -221,9 +226,37 @@ namespace Soobak.AssetInsights {
       _dashboardContainer.style.display = DisplayStyle.None;
 
       _dashboardPanel = new DashboardPanel(_scanner.Graph);
+      _dashboardPanel.OnNavigateToAsset += NavigateToAssetInList;
       _dashboardContainer.Add(_dashboardPanel);
 
       _root.Add(_dashboardContainer);
+    }
+
+    void NavigateToAssetInList(string assetPath) {
+      // Switch to list view
+      SwitchToView(0);
+
+      // Find the asset in the filtered list
+      var index = _filteredNodes?.FindIndex(n => n.Path == assetPath) ?? -1;
+      if (index >= 0) {
+        // Select and scroll to the asset
+        _assetList?.SetSelection(index);
+        _assetList?.ScrollToItem(index);
+      } else {
+        // Asset not in current filter, clear filter and search
+        _searchField.value = "";
+        RefreshAssetList();
+
+        // Try again after refresh
+        index = _filteredNodes?.FindIndex(n => n.Path == assetPath) ?? -1;
+        if (index >= 0) {
+          _assetList?.SetSelection(index);
+          _assetList?.ScrollToItem(index);
+        }
+      }
+
+      // Show in preview panel
+      _previewPanel?.ShowAsset(assetPath);
     }
 
     void CreateSettingsView() {

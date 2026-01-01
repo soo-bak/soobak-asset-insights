@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -26,6 +27,12 @@ namespace Soobak.AssetInsights {
     Dictionary<string, bool> _expandedSections = new();
     const int InitialItemCount = 20;
     const int ExpandedItemCount = 100;
+
+    /// <summary>
+    /// Event fired when user wants to navigate to an asset in the list view.
+    /// Double-click on an asset row will trigger this event.
+    /// </summary>
+    public event Action<string> OnNavigateToAsset;
 
     public DashboardPanel(DependencyGraph graph) {
       _graph = graph;
@@ -881,6 +888,7 @@ namespace Soobak.AssetInsights {
       row.style.borderTopRightRadius = 3;
       row.style.borderBottomLeftRadius = 3;
       row.style.borderBottomRightRadius = 3;
+      row.tooltip = "Click to ping • Double-click to show in List";
 
       row.RegisterCallback<MouseEnterEvent>(e => {
         row.style.backgroundColor = new Color(0.25f, 0.25f, 0.25f);
@@ -889,10 +897,16 @@ namespace Soobak.AssetInsights {
         row.style.backgroundColor = StyleKeyword.Null;
       });
       row.RegisterCallback<ClickEvent>(e => {
-        var asset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
-        if (asset != null) {
-          EditorGUIUtility.PingObject(asset);
-          Selection.activeObject = asset;
+        if (e.clickCount == 2) {
+          // Double-click: Navigate to asset in list view
+          OnNavigateToAsset?.Invoke(assetPath);
+        } else {
+          // Single click: Ping asset in project window
+          var asset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+          if (asset != null) {
+            EditorGUIUtility.PingObject(asset);
+            Selection.activeObject = asset;
+          }
         }
       });
 
