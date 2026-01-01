@@ -116,8 +116,78 @@ namespace Soobak.AssetInsights {
       CreateSettingsView();
       CreateExportSection();
 
+      // Register keyboard shortcuts
+      _root.RegisterCallback<KeyDownEvent>(OnKeyDown);
+      _root.focusable = true;
+
       SwitchToView(0);
       UpdateUI();
+    }
+
+    void OnKeyDown(KeyDownEvent evt) {
+      // Ctrl+F - Focus search field
+      if (evt.ctrlKey && evt.keyCode == KeyCode.F) {
+        _searchField?.Focus();
+        evt.StopPropagation();
+        return;
+      }
+
+      // F5 or Ctrl+R - Rescan project
+      if (evt.keyCode == KeyCode.F5 || (evt.ctrlKey && evt.keyCode == KeyCode.R)) {
+        if (!_isScanning && _scanButton != null && _scanButton.enabledSelf) {
+          StartScan();
+          evt.StopPropagation();
+        }
+        return;
+      }
+
+      // Escape - Clear selection
+      if (evt.keyCode == KeyCode.Escape) {
+        _assetList?.ClearSelection();
+        _selectedNodes.Clear();
+        UpdateSelectionUI();
+        evt.StopPropagation();
+        return;
+      }
+
+      // Delete - Delete selected assets
+      if (evt.keyCode == KeyCode.Delete && _selectedNodes.Count > 0) {
+        DeleteSelectedAssets();
+        evt.StopPropagation();
+        return;
+      }
+
+      // Ctrl+A - Select all visible assets
+      if (evt.ctrlKey && evt.keyCode == KeyCode.A && _currentView == 0) {
+        if (_filteredNodes != null && _filteredNodes.Count > 0) {
+          _assetList?.SetSelection(Enumerable.Range(0, _filteredNodes.Count).ToList());
+          evt.StopPropagation();
+        }
+        return;
+      }
+
+      // Ctrl+E - Export report
+      if (evt.ctrlKey && evt.keyCode == KeyCode.E) {
+        if (_exportButton != null && _exportButton.enabledSelf) {
+          ShowExportMenu();
+          evt.StopPropagation();
+        }
+        return;
+      }
+
+      // Tab switching: Ctrl+1/2/3 for List/Dashboard/Settings
+      if (evt.ctrlKey) {
+        if (evt.keyCode == KeyCode.Alpha1 || evt.keyCode == KeyCode.Keypad1) {
+          SwitchToView(0);
+          evt.StopPropagation();
+        } else if (evt.keyCode == KeyCode.Alpha2 || evt.keyCode == KeyCode.Keypad2) {
+          SwitchToView(1);
+          evt.StopPropagation();
+        } else if (evt.keyCode == KeyCode.Alpha3 || evt.keyCode == KeyCode.Keypad3) {
+          SwitchToView(2);
+          evt.StopPropagation();
+        }
+      }
     }
 
     void CreateViewTabs() {
@@ -127,14 +197,17 @@ namespace Soobak.AssetInsights {
       tabContainer.style.flexShrink = 0;
 
       _listTabButton = new Button(() => SwitchToView(0)) { text = "List" };
+      _listTabButton.tooltip = "View asset list (Ctrl+1)";
       _listTabButton.style.flexGrow = 1;
       tabContainer.Add(_listTabButton);
 
       _dashboardTabButton = new Button(() => SwitchToView(1)) { text = "Dashboard" };
+      _dashboardTabButton.tooltip = "View dashboard overview (Ctrl+2)";
       _dashboardTabButton.style.flexGrow = 1;
       tabContainer.Add(_dashboardTabButton);
 
       _settingsTabButton = new Button(() => SwitchToView(2)) { text = "Settings" };
+      _settingsTabButton.tooltip = "Configure settings (Ctrl+3)";
       _settingsTabButton.style.flexGrow = 1;
       tabContainer.Add(_settingsTabButton);
 
@@ -212,6 +285,7 @@ namespace Soobak.AssetInsights {
       toolbar.style.flexShrink = 0;
 
       _scanButton = new Button(StartScan) { text = "Scan Project" };
+      _scanButton.tooltip = "Scan all assets in the project (F5 or Ctrl+R)";
       _scanButton.style.flexGrow = 1;
       toolbar.Add(_scanButton);
 
@@ -255,6 +329,7 @@ namespace Soobak.AssetInsights {
       container.style.flexShrink = 0;
 
       _searchField = new TextField();
+      _searchField.tooltip = "Search assets by name or path (Ctrl+F)";
       _searchField.style.flexGrow = 1;
       _searchField.RegisterValueChangedCallback(OnSearchChanged);
       container.Add(_searchField);
@@ -406,6 +481,7 @@ namespace Soobak.AssetInsights {
       selectionRow.Add(_selectionLabel);
 
       _deleteButton = new Button(DeleteSelectedAssets) { text = "Delete Selected" };
+      _deleteButton.tooltip = "Delete selected assets (Delete key)";
       _deleteButton.style.width = 110;
       _deleteButton.style.backgroundColor = new Color(0.6f, 0.2f, 0.2f);
       _deleteButton.SetEnabled(false);
@@ -421,6 +497,7 @@ namespace Soobak.AssetInsights {
       container.style.minHeight = 24;
 
       _exportButton = new Button(ShowExportMenu) { text = "Export Report" };
+      _exportButton.tooltip = "Export analysis report (Ctrl+E)";
       _exportButton.style.flexGrow = 1;
       _exportButton.SetEnabled(false);
       container.Add(_exportButton);
