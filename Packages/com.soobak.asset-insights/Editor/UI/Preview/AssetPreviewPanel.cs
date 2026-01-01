@@ -176,20 +176,29 @@ namespace Soobak.AssetInsights {
       // Clear previous image reference to allow GC
       _previewImage.image = null;
 
+      // Load asset temporarily just to get its preview
       var asset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
       if (asset == null) {
         return;
       }
 
-      // Try to get asset preview - these are cached by Unity internally
-      // We just display them, Unity manages the texture lifecycle
-      var preview = AssetPreview.GetAssetPreview(asset);
-      if (preview != null) {
-        _previewImage.image = preview;
-      } else {
-        // Fallback to mini thumbnail
-        var icon = AssetPreview.GetMiniThumbnail(asset);
-        _previewImage.image = icon;
+      try {
+        // Try to get asset preview - these are cached by Unity internally
+        // We just display them, Unity manages the texture lifecycle
+        var preview = AssetPreview.GetAssetPreview(asset);
+        if (preview != null) {
+          _previewImage.image = preview;
+        } else {
+          // Fallback to mini thumbnail
+          var icon = AssetPreview.GetMiniThumbnail(asset);
+          _previewImage.image = icon;
+        }
+      } finally {
+        // Unload the asset reference (not the preview texture which is cached)
+        // This prevents accumulation of loaded assets when clicking through list
+        if (!(asset is GameObject) && !(asset is Component)) {
+          Resources.UnloadAsset(asset);
+        }
       }
     }
 

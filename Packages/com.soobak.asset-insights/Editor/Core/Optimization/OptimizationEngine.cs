@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
+using UnityEngine;
 
 namespace Soobak.AssetInsights {
   public class OptimizationEngine {
@@ -8,6 +9,10 @@ namespace Soobak.AssetInsights {
     readonly DependencyGraph _graph;
     OptimizationReport _cachedReport;
     readonly Dictionary<string, List<OptimizationIssue>> _assetIssueCache = new();
+
+    // Batch processing settings
+    const int CleanupBatchSize = 50; // Cleanup memory every N heavy assets
+    int _heavyAssetCounter;
 
     /// <summary>
     /// Returns the cached report from the last Analyze() call, or null if not yet analyzed.
@@ -42,10 +47,22 @@ namespace Soobak.AssetInsights {
         return _cachedReport;
 
       var report = new OptimizationReport();
+      _heavyAssetCounter = 0;
 
       foreach (var node in _graph.Nodes.Values) {
         var nodeIssues = AnalyzeAssetCached(node.Path).ToList();
         report.Issues.AddRange(nodeIssues);
+
+        // Track heavy assets (those that load actual Unity objects)
+        if (IsHeavyAssetType(node.Type)) {
+          _heavyAssetCounter++;
+
+          // Periodically clean up memory to prevent GPU memory exhaustion
+          if (_heavyAssetCounter >= CleanupBatchSize) {
+            _heavyAssetCounter = 0;
+            EditorUtility.UnloadUnusedAssetsImmediate();
+          }
+        }
       }
 
       report.Issues = report.Issues
@@ -59,12 +76,21 @@ namespace Soobak.AssetInsights {
         .GroupBy(i => i.Severity)
         .ToDictionary(g => g.Key, g => g.Count());
 
-      // Note: Removed EditorUtility.UnloadUnusedAssetsImmediate() as it's
-      // an extremely heavy synchronous operation that causes UI freezes.
-      // Let Unity's normal GC handle memory cleanup instead.
+      // Final cleanup after all analysis
+      EditorUtility.UnloadUnusedAssetsImmediate();
 
       _cachedReport = report;
       return report;
+    }
+
+    /// <summary>
+    /// Asset types that require loading actual Unity objects (textures, materials, meshes).
+    /// These consume GPU/CPU memory and need periodic cleanup.
+    /// </summary>
+    static bool IsHeavyAssetType(AssetType type) {
+      return type == AssetType.Texture ||
+             type == AssetType.Material ||
+             type == AssetType.Model;
     }
 
     public IEnumerable<OptimizationIssue> AnalyzeAsset(string assetPath) {

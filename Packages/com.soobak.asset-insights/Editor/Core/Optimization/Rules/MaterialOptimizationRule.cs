@@ -18,25 +18,30 @@ namespace Soobak.AssetInsights {
       if (node.Type != AssetType.Material)
         yield break;
 
-      var material = AssetDatabase.LoadAssetAtPath<Material>(node.Path);
-      if (material == null)
-        yield break;
+      // Collect all issues without yielding during material load
+      var issues = new List<OptimizationIssue>();
 
-      // Collect issues and unload material after evaluation
-      var issues = EvaluateMaterial(material, node, graph);
+      var material = AssetDatabase.LoadAssetAtPath<Material>(node.Path);
+      if (material != null) {
+        try {
+          EvaluateMaterial(material, node, graph, issues);
+        } finally {
+          // Unload the material to free memory
+          Resources.UnloadAsset(material);
+        }
+      }
+
+      // Yield issues after material is unloaded
       foreach (var issue in issues) {
         yield return issue;
       }
-
-      // Unload the material to free memory
-      Resources.UnloadAsset(material);
     }
 
-    IEnumerable<OptimizationIssue> EvaluateMaterial(Material material, AssetNodeModel node, DependencyGraph graph) {
+    void EvaluateMaterial(Material material, AssetNodeModel node, DependencyGraph graph, List<OptimizationIssue> issues) {
 
       // Check for missing shader
       if (material.shader == null || material.shader.name == "Hidden/InternalErrorShader") {
-        yield return new OptimizationIssue {
+        issues.Add(new OptimizationIssue {
           RuleName = "Missing Shader",
           AssetPath = node.Path,
           AssetName = node.Name,
@@ -45,8 +50,8 @@ namespace Soobak.AssetInsights {
           Recommendation = "Assign a valid shader to this material",
           PotentialSavings = 0,
           IsAutoFixable = false
-        };
-        yield break;
+        });
+        return;
       }
 
       // Check for Standard shader usage (could use simpler shader)
@@ -56,7 +61,7 @@ namespace Soobak.AssetInsights {
         var usesMetallic = material.IsKeywordEnabled("_METALLICGLOSSMAP");
 
         if (!usesEmission && !usesBumpMap && !usesMetallic) {
-          yield return new OptimizationIssue {
+          issues.Add(new OptimizationIssue {
             RuleName = "Overly Complex Shader",
             AssetPath = node.Path,
             AssetName = node.Name,
@@ -65,45 +70,14 @@ namespace Soobak.AssetInsights {
             Recommendation = "Consider using a simpler shader like 'Unlit' or 'Mobile/Diffuse'",
             PotentialSavings = 0,
             IsAutoFixable = false
-          };
+          });
         }
       }
 
-      // Check for unused texture slots with assigned textures
-      var unusedTextureCount = 0;
+      // Single pass through texture properties (previously was two loops)
       var shader = material.shader;
       var propertyCount = ShaderUtil.GetPropertyCount(shader);
-
-      for (int i = 0; i < propertyCount; i++) {
-        if (ShaderUtil.GetPropertyType(shader, i) != ShaderUtil.ShaderPropertyType.TexEnv)
-          continue;
-
-        var propName = ShaderUtil.GetPropertyName(shader, i);
-        var texture = material.GetTexture(propName);
-
-        if (texture == null)
-          continue;
-
-        // Check if the texture is actually used based on keywords
-        if (IsTextureUnused(material, propName)) {
-          unusedTextureCount++;
-        }
-      }
-
-      if (unusedTextureCount > 0) {
-        yield return new OptimizationIssue {
-          RuleName = "Unused Texture Slots",
-          AssetPath = node.Path,
-          AssetName = node.Name,
-          Severity = OptimizationSeverity.Warning,
-          Message = $"Material has {unusedTextureCount} texture(s) that may not be used",
-          Recommendation = "Review and remove unused texture references",
-          PotentialSavings = 0,
-          IsAutoFixable = false
-        };
-      }
-
-      // Check for materials with many texture references (potential memory hog)
+      var unusedTextureCount = 0;
       var textureCount = 0;
       long totalTextureSize = 0;
 
@@ -112,19 +86,41 @@ namespace Soobak.AssetInsights {
           continue;
 
         var propName = ShaderUtil.GetPropertyName(shader, i);
+        // Note: GetTexture returns already-loaded reference, doesn't load new texture
         var texture = material.GetTexture(propName);
 
-        if (texture != null) {
-          textureCount++;
-          var texturePath = AssetDatabase.GetAssetPath(texture);
-          if (graph.TryGetNode(texturePath, out var texNode)) {
-            totalTextureSize += texNode.SizeBytes;
-          }
+        if (texture == null)
+          continue;
+
+        textureCount++;
+
+        // Check if unused
+        if (IsTextureUnused(material, propName)) {
+          unusedTextureCount++;
+        }
+
+        // Calculate size from graph (no additional asset loading)
+        var texturePath = AssetDatabase.GetAssetPath(texture);
+        if (graph.TryGetNode(texturePath, out var texNode)) {
+          totalTextureSize += texNode.SizeBytes;
         }
       }
 
+      if (unusedTextureCount > 0) {
+        issues.Add(new OptimizationIssue {
+          RuleName = "Unused Texture Slots",
+          AssetPath = node.Path,
+          AssetName = node.Name,
+          Severity = OptimizationSeverity.Warning,
+          Message = $"Material has {unusedTextureCount} texture(s) that may not be used",
+          Recommendation = "Review and remove unused texture references",
+          PotentialSavings = 0,
+          IsAutoFixable = false
+        });
+      }
+
       if (textureCount > 6) {
-        yield return new OptimizationIssue {
+        issues.Add(new OptimizationIssue {
           RuleName = "Many Texture References",
           AssetPath = node.Path,
           AssetName = node.Name,
@@ -133,12 +129,12 @@ namespace Soobak.AssetInsights {
           Recommendation = "Consider using texture atlasing or reducing texture count",
           PotentialSavings = 0,
           IsAutoFixable = false
-        };
+        });
       }
 
       // Check for GPU Instancing
       if (!material.enableInstancing && ShouldEnableInstancing(node.Path)) {
-        yield return new OptimizationIssue {
+        issues.Add(new OptimizationIssue {
           RuleName = "GPU Instancing Disabled",
           AssetPath = node.Path,
           AssetName = node.Name,
@@ -147,12 +143,12 @@ namespace Soobak.AssetInsights {
           Recommendation = "Enable GPU Instancing for better batching performance",
           PotentialSavings = 0,
           IsAutoFixable = true
-        };
+        });
       }
 
       // Check render queue issues
       if (material.renderQueue > 3000 && !material.shader.name.Contains("Transparent")) {
-        yield return new OptimizationIssue {
+        issues.Add(new OptimizationIssue {
           RuleName = "High Render Queue",
           AssetPath = node.Path,
           AssetName = node.Name,
@@ -161,7 +157,7 @@ namespace Soobak.AssetInsights {
           Recommendation = "Verify render queue is intentionally set to transparent range",
           PotentialSavings = 0,
           IsAutoFixable = false
-        };
+        });
       }
     }
 
