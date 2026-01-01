@@ -17,8 +17,87 @@ namespace Soobak.AssetInsights {
       if (nodes == null || nodes.Count == 0)
         return;
 
-      // Always use hierarchical layout for performance (O(n) vs O(n²))
-      ApplyHierarchicalLayout(nodes, centerPath);
+      ApplyBidirectionalLayout(nodes, centerPath);
+    }
+
+    void ApplyBidirectionalLayout(List<AssetGraphNode> nodes, string centerPath) {
+      var centerNode = nodes.FirstOrDefault(n => n.AssetPath == centerPath);
+      if (centerNode == null)
+        return;
+
+      // Separate nodes into dependents (refs) and dependencies (deps)
+      var dependents = new Dictionary<AssetGraphNode, int>(); // level < 0
+      var dependencies = new Dictionary<AssetGraphNode, int>(); // level > 0
+
+      // BFS for dependents (left side, negative levels)
+      CollectByDirection(nodes, centerNode, dependents, -1, true);
+      // BFS for dependencies (right side, positive levels)
+      CollectByDirection(nodes, centerNode, dependencies, 1, false);
+
+      // Position center node
+      var centerX = 500f;
+      var centerY = 400f;
+      centerNode.SetPosition(new Rect(centerX, centerY, NodeWidth, NodeHeight));
+
+      // Position dependents (left side)
+      PositionNodesByLevel(dependents, centerX, centerY, -HorizontalSpacing);
+
+      // Position dependencies (right side)
+      PositionNodesByLevel(dependencies, centerX, centerY, HorizontalSpacing);
+    }
+
+    void CollectByDirection(List<AssetGraphNode> allNodes, AssetGraphNode start,
+      Dictionary<AssetGraphNode, int> result, int levelStep, bool reverse) {
+      var queue = new Queue<(AssetGraphNode node, int level)>();
+
+      // Get initial connections
+      var startConnections = reverse
+        ? start.InputPort.connections.Select(e => e.output.node as AssetGraphNode)
+        : start.OutputPort.connections.Select(e => e.input.node as AssetGraphNode);
+
+      foreach (var connected in startConnections) {
+        if (connected != null && allNodes.Contains(connected) && !result.ContainsKey(connected)) {
+          result[connected] = levelStep;
+          queue.Enqueue((connected, levelStep));
+        }
+      }
+
+      while (queue.Count > 0) {
+        var (current, level) = queue.Dequeue();
+        var nextLevel = level + levelStep;
+
+        var connections = reverse
+          ? current.InputPort.connections.Select(e => e.output.node as AssetGraphNode)
+          : current.OutputPort.connections.Select(e => e.input.node as AssetGraphNode);
+
+        foreach (var connected in connections) {
+          if (connected != null && allNodes.Contains(connected) && !result.ContainsKey(connected)) {
+            result[connected] = nextLevel;
+            queue.Enqueue((connected, nextLevel));
+          }
+        }
+      }
+    }
+
+    void PositionNodesByLevel(Dictionary<AssetGraphNode, int> nodesByLevel, float centerX, float centerY, float xStep) {
+      var grouped = nodesByLevel.GroupBy(kv => kv.Value)
+        .OrderBy(g => Mathf.Abs(g.Key))
+        .ToList();
+
+      foreach (var group in grouped) {
+        var level = group.Key;
+        var levelNodes = group.Select(kv => kv.Key).ToList();
+        var x = centerX + level * Mathf.Abs(xStep);
+
+        // Center nodes vertically around centerY
+        var totalHeight = (levelNodes.Count - 1) * VerticalSpacing;
+        var startY = centerY - totalHeight / 2;
+
+        for (int i = 0; i < levelNodes.Count; i++) {
+          var y = startY + i * VerticalSpacing;
+          levelNodes[i].SetPosition(new Rect(x, y, NodeWidth, NodeHeight));
+        }
+      }
     }
 
     void ApplyRadialLayout(List<AssetGraphNode> nodes, string centerPath) {
