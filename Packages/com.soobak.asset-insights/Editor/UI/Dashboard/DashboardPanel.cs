@@ -165,31 +165,29 @@ namespace Soobak.AssetInsights {
         section.Add(summary);
 
         var shown = 0;
-        foreach (var path in result.UnusedAssets.Take(20)) {
-          if (_graph.TryGetNode(path, out var node)) {
-            var row = CreateClickableRow(path);
+        foreach (var info in result.UnusedAssets.Take(20)) {
+          var row = CreateClickableRow(info.Path);
 
-            var icon = new Image();
-            icon.image = AssetDatabase.GetCachedIcon(path);
-            icon.style.width = 16;
-            icon.style.height = 16;
-            icon.style.marginRight = 6;
-            row.Add(icon);
+          var icon = new Image();
+          icon.image = AssetDatabase.GetCachedIcon(info.Path);
+          icon.style.width = 16;
+          icon.style.height = 16;
+          icon.style.marginRight = 6;
+          row.Add(icon);
 
-            var nameLabel = new Label(node.Name);
-            nameLabel.style.flexGrow = 1;
-            nameLabel.style.overflow = Overflow.Hidden;
-            nameLabel.style.textOverflow = TextOverflow.Ellipsis;
-            row.Add(nameLabel);
+          var nameLabel = new Label(info.Name);
+          nameLabel.style.flexGrow = 1;
+          nameLabel.style.overflow = Overflow.Hidden;
+          nameLabel.style.textOverflow = TextOverflow.Ellipsis;
+          row.Add(nameLabel);
 
-            var sizeLabel = new Label(node.FormattedSize);
-            sizeLabel.style.width = 60;
-            sizeLabel.style.unityTextAlign = TextAnchor.MiddleRight;
-            row.Add(sizeLabel);
+          var sizeLabel = new Label(info.FormattedSize);
+          sizeLabel.style.width = 60;
+          sizeLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+          row.Add(sizeLabel);
 
-            section.Add(row);
-            shown++;
-          }
+          section.Add(row);
+          shown++;
         }
 
         if (result.TotalUnusedCount > shown) {
@@ -295,8 +293,8 @@ namespace Soobak.AssetInsights {
           cycleContainer.style.borderLeftWidth = 2;
           cycleContainer.style.borderLeftColor = new Color(1f, 0.4f, 0.4f);
 
-          for (int i = 0; i < cycle.Count; i++) {
-            var path = cycle[i];
+          for (int i = 0; i < cycle.AssetPaths.Count; i++) {
+            var path = cycle.AssetPaths[i];
             var row = CreateClickableRow(path);
 
             var arrow = new Label(i == 0 ? "●" : "↓");
@@ -342,7 +340,7 @@ namespace Soobak.AssetInsights {
           groupContainer.style.borderLeftWidth = 2;
           groupContainer.style.borderLeftColor = new Color(0.8f, 0.6f, 0.2f);
 
-          var headerLabel = new Label($"{group.Count} files with same name: {group.Key}");
+          var headerLabel = new Label($"{group.Count()} files with same name: {group.Key}");
           headerLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
           headerLabel.style.marginBottom = 4;
           groupContainer.Add(headerLabel);
