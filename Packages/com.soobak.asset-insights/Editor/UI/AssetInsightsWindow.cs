@@ -45,11 +45,11 @@ namespace Soobak.AssetInsights {
     BuildInclusionAnalyzer _buildAnalyzer;
     OptimizationEngine _cachedOptimizationEngine;
 
-    // Search debouncing - use single scheduled callback pattern
-    double _scheduledSearchTime;
+    // Search debouncing
+    double _lastSearchTime;
     string _pendingSearch;
-    bool _searchScheduled;
-    const double SearchDebounceDelay = 0.15; // 150ms
+    bool _searchPending;
+    const double SearchDebounceDelay = 0.2; // 200ms
 
     // View switching
     VisualElement _listContainer;
@@ -514,34 +514,29 @@ namespace Soobak.AssetInsights {
     }
 
     void OnSearchChanged(ChangeEvent<string> evt) {
-      // Debounce search to avoid excessive refreshes during typing
       _pendingSearch = evt.newValue;
-      _scheduledSearchTime = EditorApplication.timeSinceStartup + SearchDebounceDelay;
+      _lastSearchTime = EditorApplication.timeSinceStartup;
 
-      if (!_searchScheduled) {
-        _searchScheduled = true;
-        EditorApplication.update += ProcessDebouncedSearch;
+      if (!_searchPending) {
+        _searchPending = true;
+        EditorApplication.delayCall += CheckAndExecuteSearch;
       }
     }
 
-    void ProcessDebouncedSearch() {
-      if (EditorApplication.timeSinceStartup >= _scheduledSearchTime) {
-        // Unregister BEFORE processing to prevent re-entry issues
-        EditorApplication.update -= ProcessDebouncedSearch;
-        _searchScheduled = false;
-
+    void CheckAndExecuteSearch() {
+      double elapsed = EditorApplication.timeSinceStartup - _lastSearchTime;
+      if (elapsed >= SearchDebounceDelay) {
+        _searchPending = false;
         if (_searchField?.value == _pendingSearch) {
           RefreshAssetList();
         }
+      } else {
+        EditorApplication.delayCall += CheckAndExecuteSearch;
       }
-      // If not enough time passed, keep waiting (update will be called again next frame)
     }
 
     void CleanupSearchDebounce() {
-      if (_searchScheduled) {
-        EditorApplication.update -= ProcessDebouncedSearch;
-        _searchScheduled = false;
-      }
+      _searchPending = false;
     }
 
     void OnAssetSelected(IEnumerable<object> selection) {
@@ -680,34 +675,35 @@ namespace Soobak.AssetInsights {
 
     void RefreshAssetList() {
       var search = _searchField?.value?.ToLowerInvariant() ?? "";
-
-      // Use single allocation for filtered list
       var nodes = _scanner.Graph.Nodes.Values;
       var nodeCount = _scanner.Graph.NodeCount;
 
+      // Reuse existing list if possible, only reallocate if needed
+      if (_filteredNodes == null || _filteredNodes.Capacity < nodeCount) {
+        _filteredNodes = new List<AssetNodeModel>(nodeCount);
+      } else {
+        _filteredNodes.Clear();
+      }
+
       // Apply text search using cached lowercase
       if (!string.IsNullOrEmpty(search)) {
-        _filteredNodes = new List<AssetNodeModel>(nodeCount);
         foreach (var n in nodes) {
           if (n.NameLower.Contains(search) || n.PathLower.Contains(search))
             _filteredNodes.Add(n);
         }
       } else {
-        _filteredNodes = new List<AssetNodeModel>(nodeCount);
         foreach (var n in nodes) {
           _filteredNodes.Add(n);
         }
       }
 
-      // Apply filter panel filters
+      // Apply filter panel filters (in-place removal to avoid allocation)
       if (_filterPanel != null && _filterVisible) {
         var engine = _filterPanel.HasIssuesOnly ? _cachedOptimizationEngine : null;
-        var filtered = new List<AssetNodeModel>(_filteredNodes.Count);
-        foreach (var n in _filteredNodes) {
-          if (_filterPanel.PassesFilter(n, _scanner.Graph, _unusedAssets, _circularAssets, engine))
-            filtered.Add(n);
+        for (int i = _filteredNodes.Count - 1; i >= 0; i--) {
+          if (!_filterPanel.PassesFilter(_filteredNodes[i], _scanner.Graph, _unusedAssets, _circularAssets, engine))
+            _filteredNodes.RemoveAt(i);
         }
-        _filteredNodes = filtered;
       }
 
       // Apply sorting using cached counts (avoid LINQ allocations)

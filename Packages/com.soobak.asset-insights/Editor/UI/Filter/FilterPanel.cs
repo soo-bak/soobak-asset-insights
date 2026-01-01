@@ -9,10 +9,10 @@ namespace Soobak.AssetInsights {
   public class FilterPanel : VisualElement {
     public event Action OnFilterChanged;
 
-    // Debouncing for slider changes - use single scheduled callback pattern
-    double _scheduledFilterTime;
-    bool _filterChangeScheduled;
-    const double FilterDebounceDelay = 0.1; // 100ms
+    // Debouncing for slider changes
+    double _lastFilterChangeTime;
+    bool _filterChangePending;
+    const double FilterDebounceDelay = 0.15; // 150ms
 
     // Type filters
     readonly Dictionary<AssetType, Toggle> _typeToggles = new();
@@ -46,32 +46,30 @@ namespace Soobak.AssetInsights {
     }
 
     void NotifyFilterChangedDebounced() {
-      // Schedule the filter change for later - only register ONE callback
-      _scheduledFilterTime = EditorApplication.timeSinceStartup + FilterDebounceDelay;
+      _lastFilterChangeTime = EditorApplication.timeSinceStartup;
 
-      if (!_filterChangeScheduled) {
-        _filterChangeScheduled = true;
-        EditorApplication.update += ProcessDebouncedFilterChange;
+      // Only schedule one callback
+      if (!_filterChangePending) {
+        _filterChangePending = true;
+        EditorApplication.delayCall += CheckAndFireFilterChange;
       }
     }
 
-    void ProcessDebouncedFilterChange() {
+    void CheckAndFireFilterChange() {
       // Check if enough time has passed since last change
-      if (EditorApplication.timeSinceStartup >= _scheduledFilterTime) {
-        // Unregister BEFORE invoking to prevent re-entry issues
-        EditorApplication.update -= ProcessDebouncedFilterChange;
-        _filterChangeScheduled = false;
+      double elapsed = EditorApplication.timeSinceStartup - _lastFilterChangeTime;
+      if (elapsed >= FilterDebounceDelay) {
+        // Enough time passed, fire the event
+        _filterChangePending = false;
         OnFilterChanged?.Invoke();
+      } else {
+        // Not enough time, schedule another check (but limit to prevent infinite loops)
+        EditorApplication.delayCall += CheckAndFireFilterChange;
       }
-      // If not enough time passed, keep waiting (update will be called again next frame)
     }
 
     public void Cleanup() {
-      // Call this when the panel is being destroyed
-      if (_filterChangeScheduled) {
-        EditorApplication.update -= ProcessDebouncedFilterChange;
-        _filterChangeScheduled = false;
-      }
+      _filterChangePending = false;
     }
 
     void BuildUI() {

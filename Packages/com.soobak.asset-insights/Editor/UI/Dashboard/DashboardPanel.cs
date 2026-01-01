@@ -46,8 +46,11 @@ namespace Soobak.AssetInsights {
     }
 
     public void SetResult(HealthScoreResult result) {
-      _cachedResult = result;
-      _analysisDirty = true;
+      // Only mark dirty if result actually changed
+      if (_cachedResult != result) {
+        _cachedResult = result;
+        _analysisDirty = true;
+      }
       Refresh();
     }
 
@@ -107,8 +110,8 @@ namespace Soobak.AssetInsights {
         _cachedDuplicates = FindDuplicatesInternal();
       }
 
-      // Release memory after heavy analysis
-      EditorUtility.UnloadUnusedAssetsImmediate();
+      // Note: Removed EditorUtility.UnloadUnusedAssetsImmediate() as it's extremely heavy
+      // and was causing UI freezes. Let Unity's normal GC handle memory cleanup.
     }
 
     public void Refresh() {
