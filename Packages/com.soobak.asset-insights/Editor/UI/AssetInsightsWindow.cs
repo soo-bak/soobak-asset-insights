@@ -16,6 +16,15 @@ namespace Soobak.AssetInsights {
     string _selectedAssetPath;
     HealthScoreResult _cachedHealthResult;
 
+    // Sorting
+    enum SortColumn { Name, Refs, Deps, Size }
+    SortColumn _sortColumn = SortColumn.Size;
+    bool _sortAscending = false;
+    Label _nameHeader;
+    Label _refsHeader;
+    Label _depsHeader;
+    Label _sizeHeader;
+
     VisualElement _root;
     ProgressBar _progressBar;
     Label _statusLabel;
@@ -217,32 +226,65 @@ namespace Soobak.AssetInsights {
       header.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f);
       header.style.paddingBottom = 4;
 
-      var assetHeader = new Label("Asset");
-      assetHeader.style.flexGrow = 1;
-      assetHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
-      header.Add(assetHeader);
+      _nameHeader = CreateSortableHeader("Asset", SortColumn.Name);
+      _nameHeader.style.flexGrow = 1;
+      header.Add(_nameHeader);
 
-      var refsHeader = new Label("Refs");
-      refsHeader.style.width = 45;
-      refsHeader.style.unityTextAlign = TextAnchor.MiddleRight;
-      refsHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
-      refsHeader.tooltip = "Dependents (assets that reference this)";
-      header.Add(refsHeader);
+      _refsHeader = CreateSortableHeader("Refs", SortColumn.Refs);
+      _refsHeader.style.width = 50;
+      _refsHeader.style.unityTextAlign = TextAnchor.MiddleRight;
+      _refsHeader.tooltip = "Dependents (assets that reference this) - Click to sort";
+      header.Add(_refsHeader);
 
-      var depsHeader = new Label("Deps");
-      depsHeader.style.width = 45;
-      depsHeader.style.unityTextAlign = TextAnchor.MiddleRight;
-      depsHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
-      depsHeader.tooltip = "Dependencies (assets this references)";
-      header.Add(depsHeader);
+      _depsHeader = CreateSortableHeader("Deps", SortColumn.Deps);
+      _depsHeader.style.width = 50;
+      _depsHeader.style.unityTextAlign = TextAnchor.MiddleRight;
+      _depsHeader.tooltip = "Dependencies (assets this references) - Click to sort";
+      header.Add(_depsHeader);
 
-      var sizeHeader = new Label("Size");
-      sizeHeader.style.width = 65;
-      sizeHeader.style.unityTextAlign = TextAnchor.MiddleRight;
-      sizeHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
-      header.Add(sizeHeader);
+      _sizeHeader = CreateSortableHeader("Size", SortColumn.Size);
+      _sizeHeader.style.width = 70;
+      _sizeHeader.style.unityTextAlign = TextAnchor.MiddleRight;
+      _sizeHeader.tooltip = "File size - Click to sort";
+      header.Add(_sizeHeader);
 
       parent.Add(header);
+      UpdateSortHeaders();
+    }
+
+    Label CreateSortableHeader(string text, SortColumn column) {
+      var label = new Label(text);
+      label.style.unityFontStyleAndWeight = FontStyle.Bold;
+      label.style.paddingLeft = 2;
+      label.style.paddingRight = 2;
+
+      label.RegisterCallback<MouseEnterEvent>(e => {
+        label.style.backgroundColor = new Color(0.3f, 0.3f, 0.3f);
+      });
+      label.RegisterCallback<MouseLeaveEvent>(e => {
+        label.style.backgroundColor = StyleKeyword.Null;
+      });
+      label.RegisterCallback<ClickEvent>(e => {
+        if (_sortColumn == column) {
+          _sortAscending = !_sortAscending;
+        } else {
+          _sortColumn = column;
+          _sortAscending = column == SortColumn.Name; // Name defaults ascending, others descending
+        }
+        UpdateSortHeaders();
+        RefreshAssetList();
+      });
+
+      return label;
+    }
+
+    void UpdateSortHeaders() {
+      string arrow = _sortAscending ? " ▲" : " ▼";
+
+      _nameHeader.text = "Asset" + (_sortColumn == SortColumn.Name ? arrow : "");
+      _refsHeader.text = "Refs" + (_sortColumn == SortColumn.Refs ? arrow : "");
+      _depsHeader.text = "Deps" + (_sortColumn == SortColumn.Deps ? arrow : "");
+      _sizeHeader.text = "Size" + (_sortColumn == SortColumn.Size ? arrow : "");
     }
 
     void CreateAssetList(VisualElement parent) {
@@ -479,13 +521,30 @@ namespace Soobak.AssetInsights {
 
     void RefreshAssetList() {
       var search = _searchField?.value?.ToLowerInvariant() ?? "";
-      _filteredNodes = _scanner.Graph.GetNodesBySize(_scanner.Graph.NodeCount);
+      _filteredNodes = _scanner.Graph.Nodes.Values.ToList();
 
       if (!string.IsNullOrEmpty(search)) {
         _filteredNodes = _filteredNodes.FindAll(n =>
           n.Name.ToLowerInvariant().Contains(search) ||
           n.Path.ToLowerInvariant().Contains(search));
       }
+
+      // Apply sorting
+      _filteredNodes = _sortColumn switch {
+        SortColumn.Name => _sortAscending
+          ? _filteredNodes.OrderBy(n => n.Name).ToList()
+          : _filteredNodes.OrderByDescending(n => n.Name).ToList(),
+        SortColumn.Refs => _sortAscending
+          ? _filteredNodes.OrderBy(n => _scanner.Graph.GetDependents(n.Path).Count).ToList()
+          : _filteredNodes.OrderByDescending(n => _scanner.Graph.GetDependents(n.Path).Count).ToList(),
+        SortColumn.Deps => _sortAscending
+          ? _filteredNodes.OrderBy(n => _scanner.Graph.GetDependencies(n.Path).Count).ToList()
+          : _filteredNodes.OrderByDescending(n => _scanner.Graph.GetDependencies(n.Path).Count).ToList(),
+        SortColumn.Size => _sortAscending
+          ? _filteredNodes.OrderBy(n => n.SizeBytes).ToList()
+          : _filteredNodes.OrderByDescending(n => n.SizeBytes).ToList(),
+        _ => _filteredNodes
+      };
 
       _assetList.itemsSource = _filteredNodes;
       _assetList.RefreshItems();
