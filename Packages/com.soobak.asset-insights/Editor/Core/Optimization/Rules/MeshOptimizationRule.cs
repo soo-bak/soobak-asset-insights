@@ -20,17 +20,39 @@ namespace Soobak.AssetInsights {
       if (importer == null)
         yield break;
 
-      // Load the model to check mesh data
-      var gameObjects = AssetDatabase.LoadAllAssetsAtPath(node.Path);
+      // First check import settings that don't require loading the mesh
+      foreach (var issue in EvaluateImportSettings(node, importer)) {
+        yield return issue;
+      }
+
+      // Only load mesh data if file is large enough to potentially have high poly count
+      // Skip mesh loading for small files (< 100KB) to save memory
+      if (node.SizeBytes < 100 * 1024)
+        yield break;
+
+      // Load mesh data with proper cleanup
       var totalVertices = 0;
       var totalTriangles = 0;
       var meshCount = 0;
+      var hasAnimations = false;
 
-      foreach (var obj in gameObjects) {
-        if (obj is Mesh mesh) {
-          totalVertices += mesh.vertexCount;
-          totalTriangles += mesh.triangles.Length / 3;
-          meshCount++;
+      var gameObjects = AssetDatabase.LoadAllAssetsAtPath(node.Path);
+      try {
+        foreach (var obj in gameObjects) {
+          if (obj is Mesh mesh) {
+            totalVertices += mesh.vertexCount;
+            // Use triangles.Length directly, avoid creating copy
+            totalTriangles += mesh.triangles.Length / 3;
+            meshCount++;
+          } else if (obj is AnimationClip) {
+            hasAnimations = true;
+          }
+        }
+      } finally {
+        // Explicitly unload loaded assets to free memory
+        foreach (var obj in gameObjects) {
+          if (obj != null && !(obj is GameObject) && !(obj is Component))
+            Resources.UnloadAsset(obj);
         }
       }
 
@@ -62,6 +84,22 @@ namespace Soobak.AssetInsights {
         };
       }
 
+      // Check for animation import on static meshes
+      if (importer.importAnimation && !hasAnimations) {
+        yield return new OptimizationIssue {
+          RuleName = "Unnecessary Animation Import",
+          AssetPath = node.Path,
+          AssetName = node.Name,
+          Severity = OptimizationSeverity.Info,
+          Message = "Animation import enabled but no animations found",
+          Recommendation = "Disable animation import for static meshes",
+          PotentialSavings = 0,
+          IsAutoFixable = true
+        };
+      }
+    }
+
+    IEnumerable<OptimizationIssue> EvaluateImportSettings(AssetNodeModel node, ModelImporter importer) {
       // Check Read/Write enabled unnecessarily
       if (importer.isReadable) {
         yield return new OptimizationIssue {
@@ -93,7 +131,6 @@ namespace Soobak.AssetInsights {
       // Check for unnecessary normals/tangents
       if (importer.importNormals == ModelImporterNormals.Import ||
           importer.importNormals == ModelImporterNormals.Calculate) {
-        // Check if it's a simple object that might not need tangents
         if (importer.importTangents == ModelImporterTangents.Import ||
             importer.importTangents == ModelImporterTangents.CalculateMikk) {
           var isUIOrSimple = node.Path.Contains("/UI/") ||
@@ -111,30 +148,6 @@ namespace Soobak.AssetInsights {
               IsAutoFixable = true
             };
           }
-        }
-      }
-
-      // Check for animation import on static meshes
-      if (importer.importAnimation) {
-        var hasAnimations = false;
-        foreach (var obj in gameObjects) {
-          if (obj is AnimationClip) {
-            hasAnimations = true;
-            break;
-          }
-        }
-
-        if (!hasAnimations) {
-          yield return new OptimizationIssue {
-            RuleName = "Unnecessary Animation Import",
-            AssetPath = node.Path,
-            AssetName = node.Name,
-            Severity = OptimizationSeverity.Info,
-            Message = "Animation import enabled but no animations found",
-            Recommendation = "Disable animation import for static meshes",
-            PotentialSavings = 0,
-            IsAutoFixable = true
-          };
         }
       }
     }

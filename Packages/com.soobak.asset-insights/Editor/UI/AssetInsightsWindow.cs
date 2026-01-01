@@ -43,6 +43,12 @@ namespace Soobak.AssetInsights {
     HashSet<string> _unusedAssets;
     HashSet<string> _circularAssets;
     BuildInclusionAnalyzer _buildAnalyzer;
+    OptimizationEngine _cachedOptimizationEngine;
+
+    // Search debouncing
+    double _lastSearchTime;
+    string _pendingSearch;
+    const double SearchDebounceDelay = 0.15; // 150ms
 
     // View switching
     VisualElement _listContainer;
@@ -482,19 +488,28 @@ namespace Soobak.AssetInsights {
       pathLabel.text = folderPath ?? "";
 
       var refsLabel = element.Q<Label>("refs");
-      var refsCount = _scanner.Graph.GetDependents(node.Path).Count;
-      refsLabel.text = refsCount > 0 ? refsCount.ToString() : "-";
+      refsLabel.text = node.DependentCount > 0 ? node.DependentCount.ToString() : "-";
 
       var depsLabel = element.Q<Label>("deps");
-      var depsCount = _scanner.Graph.GetDependencies(node.Path).Count;
-      depsLabel.text = depsCount > 0 ? depsCount.ToString() : "-";
+      depsLabel.text = node.DependencyCount > 0 ? node.DependencyCount.ToString() : "-";
 
       var sizeLabel = element.Q<Label>("size");
       sizeLabel.text = node.FormattedSize;
     }
 
     void OnSearchChanged(ChangeEvent<string> evt) {
-      RefreshAssetList();
+      // Debounce search to avoid excessive refreshes during typing
+      _pendingSearch = evt.newValue;
+      _lastSearchTime = EditorApplication.timeSinceStartup;
+      EditorApplication.delayCall += ProcessDebouncedSearch;
+    }
+
+    void ProcessDebouncedSearch() {
+      if (EditorApplication.timeSinceStartup - _lastSearchTime >= SearchDebounceDelay) {
+        if (_searchField?.value == _pendingSearch) {
+          RefreshAssetList();
+        }
+      }
     }
 
     void OnAssetSelected(IEnumerable<object> selection) {
@@ -574,6 +589,10 @@ namespace Soobak.AssetInsights {
         _buildAnalyzer = new BuildInclusionAnalyzer(graph);
         _buildAnalyzer.Analyze();
 
+        // Cache optimization engine for filtering
+        _cachedOptimizationEngine = new OptimizationEngine(graph);
+        _cachedOptimizationEngine.Analyze();
+
         _progressBar.title = $"Complete - {graph.NodeCount} assets ({AssetNodeModel.FormatBytes(graph.GetTotalSize())})";
         _statusLabel.text = $"Health: {_cachedHealthResult.Grade} ({_cachedHealthResult.Score}/100)";
 
@@ -623,41 +642,62 @@ namespace Soobak.AssetInsights {
 
     void RefreshAssetList() {
       var search = _searchField?.value?.ToLowerInvariant() ?? "";
-      _filteredNodes = _scanner.Graph.Nodes.Values.ToList();
 
-      // Apply text search
+      // Use single allocation for filtered list
+      var nodes = _scanner.Graph.Nodes.Values;
+
+      // Apply text search using cached lowercase
       if (!string.IsNullOrEmpty(search)) {
-        _filteredNodes = _filteredNodes.FindAll(n =>
-          n.Name.ToLowerInvariant().Contains(search) ||
-          n.Path.ToLowerInvariant().Contains(search));
+        _filteredNodes = new List<AssetNodeModel>(nodes.Count);
+        foreach (var n in nodes) {
+          if (n.NameLower.Contains(search) || n.PathLower.Contains(search))
+            _filteredNodes.Add(n);
+        }
+      } else {
+        _filteredNodes = new List<AssetNodeModel>(nodes);
       }
 
       // Apply filter panel filters
       if (_filterPanel != null && _filterVisible) {
-        var engine = (_filterPanel.HasIssuesOnly) ? new OptimizationEngine(_scanner.Graph) : null;
-        _filteredNodes = _filteredNodes.FindAll(n =>
-          _filterPanel.PassesFilter(n, _scanner.Graph, _unusedAssets, _circularAssets, engine));
+        var engine = _filterPanel.HasIssuesOnly ? _cachedOptimizationEngine : null;
+        var filtered = new List<AssetNodeModel>(_filteredNodes.Count);
+        foreach (var n in _filteredNodes) {
+          if (_filterPanel.PassesFilter(n, _scanner.Graph, _unusedAssets, _circularAssets, engine))
+            filtered.Add(n);
+        }
+        _filteredNodes = filtered;
       }
 
-      // Apply sorting
-      _filteredNodes = _sortColumn switch {
-        SortColumn.Name => _sortAscending
-          ? _filteredNodes.OrderBy(n => n.Name).ToList()
-          : _filteredNodes.OrderByDescending(n => n.Name).ToList(),
-        SortColumn.Refs => _sortAscending
-          ? _filteredNodes.OrderBy(n => _scanner.Graph.GetDependents(n.Path).Count).ToList()
-          : _filteredNodes.OrderByDescending(n => _scanner.Graph.GetDependents(n.Path).Count).ToList(),
-        SortColumn.Deps => _sortAscending
-          ? _filteredNodes.OrderBy(n => _scanner.Graph.GetDependencies(n.Path).Count).ToList()
-          : _filteredNodes.OrderByDescending(n => _scanner.Graph.GetDependencies(n.Path).Count).ToList(),
-        SortColumn.Size => _sortAscending
-          ? _filteredNodes.OrderBy(n => n.SizeBytes).ToList()
-          : _filteredNodes.OrderByDescending(n => n.SizeBytes).ToList(),
-        _ => _filteredNodes
-      };
+      // Apply sorting using cached counts (avoid LINQ allocations)
+      SortFilteredNodes();
 
       _assetList.itemsSource = _filteredNodes;
       _assetList.RefreshItems();
+    }
+
+    void SortFilteredNodes() {
+      switch (_sortColumn) {
+        case SortColumn.Name:
+          _filteredNodes.Sort((a, b) => _sortAscending
+            ? string.Compare(a.Name, b.Name, System.StringComparison.Ordinal)
+            : string.Compare(b.Name, a.Name, System.StringComparison.Ordinal));
+          break;
+        case SortColumn.Refs:
+          _filteredNodes.Sort((a, b) => _sortAscending
+            ? a.DependentCount.CompareTo(b.DependentCount)
+            : b.DependentCount.CompareTo(a.DependentCount));
+          break;
+        case SortColumn.Deps:
+          _filteredNodes.Sort((a, b) => _sortAscending
+            ? a.DependencyCount.CompareTo(b.DependencyCount)
+            : b.DependencyCount.CompareTo(a.DependencyCount));
+          break;
+        case SortColumn.Size:
+          _filteredNodes.Sort((a, b) => _sortAscending
+            ? a.SizeBytes.CompareTo(b.SizeBytes)
+            : b.SizeBytes.CompareTo(a.SizeBytes));
+          break;
+      }
     }
 
     void UpdateUI() {

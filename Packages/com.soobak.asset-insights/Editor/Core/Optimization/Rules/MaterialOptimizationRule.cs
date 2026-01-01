@@ -22,6 +22,18 @@ namespace Soobak.AssetInsights {
       if (material == null)
         yield break;
 
+      // Collect issues and unload material after evaluation
+      var issues = EvaluateMaterial(material, node, graph);
+      foreach (var issue in issues) {
+        yield return issue;
+      }
+
+      // Unload the material to free memory
+      Resources.UnloadAsset(material);
+    }
+
+    IEnumerable<OptimizationIssue> EvaluateMaterial(Material material, AssetNodeModel node, DependencyGraph graph) {
+
       // Check for missing shader
       if (material.shader == null || material.shader.name == "Hidden/InternalErrorShader") {
         yield return new OptimizationIssue {

@@ -9,6 +9,14 @@ namespace Soobak.AssetInsights {
     public AssetType Type { get; }
     public long SizeBytes { get; }
 
+    // Cached lowercase versions for search optimization
+    public string NameLower { get; }
+    public string PathLower { get; }
+
+    // Cached dependency counts (set by DependencyGraph after construction)
+    public int DependencyCount { get; internal set; }
+    public int DependentCount { get; internal set; }
+
     public AssetNodeModel(string path, long sizeBytes) {
       if (string.IsNullOrEmpty(path))
         throw new ArgumentNullException(nameof(path));
@@ -18,6 +26,10 @@ namespace Soobak.AssetInsights {
       Extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
       Type = ResolveAssetType(Extension);
       SizeBytes = sizeBytes;
+
+      // Pre-cache lowercase for search performance
+      NameLower = Name.ToLowerInvariant();
+      PathLower = path.ToLowerInvariant();
     }
 
     public string FormattedSize => FormatBytes(SizeBytes);

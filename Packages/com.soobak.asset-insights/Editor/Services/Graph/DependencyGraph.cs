@@ -36,8 +36,12 @@ namespace Soobak.AssetInsights {
       if (!_nodes.ContainsKey(to))
         throw new InvalidOperationException($"Node not found: {to}");
 
-      _forward[from].Add(to);
-      _reverse[to].Add(from);
+      if (_forward[from].Add(to)) {
+        _nodes[from].DependencyCount = _forward[from].Count;
+      }
+      if (_reverse[to].Add(from)) {
+        _nodes[to].DependentCount = _reverse[to].Count;
+      }
     }
 
     public bool TryGetNode(string path, out AssetNodeModel node) {

@@ -155,23 +155,32 @@ namespace Soobak.AssetInsights {
     }
 
     List<string> FindPath(string from, string to) {
-      var queue = new Queue<List<string>>();
-      var visited = new HashSet<string>();
+      // Use parent dictionary to avoid O(n²) memory from copying lists
+      var queue = new Queue<string>();
+      var parent = new Dictionary<string, string>();
 
-      queue.Enqueue(new List<string> { from });
-      visited.Add(from);
+      queue.Enqueue(from);
+      parent[from] = null;
 
       while (queue.Count > 0) {
-        var path = queue.Dequeue();
-        var current = path[^1];
+        var current = queue.Dequeue();
 
-        if (current == to)
+        if (current == to) {
+          // Reconstruct path from parent dictionary
+          var path = new List<string>();
+          var node = to;
+          while (node != null) {
+            path.Add(node);
+            parent.TryGetValue(node, out node);
+          }
+          path.Reverse();
           return path;
+        }
 
         foreach (var dep in _graph.GetDependencies(current)) {
-          if (visited.Add(dep)) {
-            var newPath = new List<string>(path) { dep };
-            queue.Enqueue(newPath);
+          if (!parent.ContainsKey(dep)) {
+            parent[dep] = current;
+            queue.Enqueue(dep);
           }
         }
       }

@@ -1,12 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Soobak.AssetInsights {
   public class FilterPanel : VisualElement {
     public event Action OnFilterChanged;
+
+    // Debouncing for slider changes
+    double _lastFilterChangeTime;
+    bool _filterChangeScheduled;
+    const double FilterDebounceDelay = 0.1; // 100ms
 
     // Type filters
     readonly Dictionary<AssetType, Toggle> _typeToggles = new();
@@ -33,6 +39,28 @@ namespace Soobak.AssetInsights {
     public FilterPanel() {
       BuildUI();
       ResetFilters();
+    }
+
+    void NotifyFilterChanged() {
+      OnFilterChanged?.Invoke();
+    }
+
+    void NotifyFilterChangedDebounced() {
+      _lastFilterChangeTime = EditorApplication.timeSinceStartup;
+      if (!_filterChangeScheduled) {
+        _filterChangeScheduled = true;
+        EditorApplication.delayCall += ProcessDebouncedFilterChange;
+      }
+    }
+
+    void ProcessDebouncedFilterChange() {
+      _filterChangeScheduled = false;
+      if (EditorApplication.timeSinceStartup - _lastFilterChangeTime >= FilterDebounceDelay) {
+        OnFilterChanged?.Invoke();
+      } else {
+        // Reschedule if still within debounce window
+        EditorApplication.delayCall += ProcessDebouncedFilterChange;
+      }
     }
 
     void BuildUI() {
@@ -104,7 +132,7 @@ namespace Soobak.AssetInsights {
             EnabledTypes.Add(type);
           else
             EnabledTypes.Remove(type);
-          OnFilterChanged?.Invoke();
+          NotifyFilterChanged();
         });
         _typeToggles[type] = toggle;
         EnabledTypes.Add(type);
@@ -141,7 +169,7 @@ namespace Soobak.AssetInsights {
       _minSizeSlider.RegisterValueChangedCallback(e => {
         MinSize = SliderToBytes(e.newValue);
         _minSizeLabel.text = FormatSize(MinSize);
-        OnFilterChanged?.Invoke();
+        NotifyFilterChangedDebounced();
       });
       minRow.Add(_minSizeSlider);
 
@@ -169,7 +197,7 @@ namespace Soobak.AssetInsights {
       _maxSizeSlider.RegisterValueChangedCallback(e => {
         MaxSize = e.newValue >= 100 ? long.MaxValue : SliderToBytes(e.newValue);
         _maxSizeLabel.text = MaxSize == long.MaxValue ? "No limit" : FormatSize(MaxSize);
-        OnFilterChanged?.Invoke();
+        NotifyFilterChangedDebounced();
       });
       maxRow.Add(_maxSizeSlider);
 
@@ -195,7 +223,7 @@ namespace Soobak.AssetInsights {
       _hasIssuesToggle.style.fontSize = 10;
       _hasIssuesToggle.RegisterValueChangedCallback(e => {
         HasIssuesOnly = e.newValue;
-        OnFilterChanged?.Invoke();
+        NotifyFilterChanged();
       });
       container.Add(_hasIssuesToggle);
 
@@ -203,7 +231,7 @@ namespace Soobak.AssetInsights {
       _unusedOnlyToggle.style.fontSize = 10;
       _unusedOnlyToggle.RegisterValueChangedCallback(e => {
         UnusedOnly = e.newValue;
-        OnFilterChanged?.Invoke();
+        NotifyFilterChanged();
       });
       container.Add(_unusedOnlyToggle);
 
@@ -211,7 +239,7 @@ namespace Soobak.AssetInsights {
       _circularOnlyToggle.style.fontSize = 10;
       _circularOnlyToggle.RegisterValueChangedCallback(e => {
         CircularOnly = e.newValue;
-        OnFilterChanged?.Invoke();
+        NotifyFilterChanged();
       });
       container.Add(_circularOnlyToggle);
 
@@ -239,7 +267,7 @@ namespace Soobak.AssetInsights {
       UnusedOnly = false;
       CircularOnly = false;
 
-      OnFilterChanged?.Invoke();
+      NotifyFilterChanged();
     }
 
     // Convert slider value (0-100) to bytes (logarithmic scale)

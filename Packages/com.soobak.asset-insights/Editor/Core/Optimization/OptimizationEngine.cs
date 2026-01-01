@@ -1,14 +1,22 @@
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
 
 namespace Soobak.AssetInsights {
   public class OptimizationEngine {
     readonly List<IOptimizationRule> _rules = new();
     readonly DependencyGraph _graph;
+    OptimizationReport _cachedReport;
+    readonly Dictionary<string, List<OptimizationIssue>> _assetIssueCache = new();
 
     public OptimizationEngine(DependencyGraph graph) {
       _graph = graph;
       RegisterDefaultRules();
+    }
+
+    public void ClearCache() {
+      _cachedReport = null;
+      _assetIssueCache.Clear();
     }
 
     void RegisterDefaultRules() {
@@ -24,13 +32,15 @@ namespace Soobak.AssetInsights {
     }
 
     public OptimizationReport Analyze() {
+      // Return cached report if available
+      if (_cachedReport != null)
+        return _cachedReport;
+
       var report = new OptimizationReport();
 
       foreach (var node in _graph.Nodes.Values) {
-        foreach (var rule in _rules) {
-          var issues = rule.Evaluate(node, _graph);
-          report.Issues.AddRange(issues);
-        }
+        var nodeIssues = AnalyzeAssetCached(node.Path).ToList();
+        report.Issues.AddRange(nodeIssues);
       }
 
       report.Issues = report.Issues
@@ -44,18 +54,32 @@ namespace Soobak.AssetInsights {
         .GroupBy(i => i.Severity)
         .ToDictionary(g => g.Key, g => g.Count());
 
+      // Release memory after heavy analysis
+      EditorUtility.UnloadUnusedAssetsImmediate();
+
+      _cachedReport = report;
       return report;
     }
 
     public IEnumerable<OptimizationIssue> AnalyzeAsset(string assetPath) {
-      if (!_graph.TryGetNode(assetPath, out var node))
-        yield break;
+      return AnalyzeAssetCached(assetPath);
+    }
 
+    IEnumerable<OptimizationIssue> AnalyzeAssetCached(string assetPath) {
+      // Check cache first
+      if (_assetIssueCache.TryGetValue(assetPath, out var cachedIssues))
+        return cachedIssues;
+
+      if (!_graph.TryGetNode(assetPath, out var node))
+        return System.Array.Empty<OptimizationIssue>();
+
+      var issues = new List<OptimizationIssue>();
       foreach (var rule in _rules) {
-        foreach (var issue in rule.Evaluate(node, _graph)) {
-          yield return issue;
-        }
+        issues.AddRange(rule.Evaluate(node, _graph));
       }
+
+      _assetIssueCache[assetPath] = issues;
+      return issues;
     }
   }
 

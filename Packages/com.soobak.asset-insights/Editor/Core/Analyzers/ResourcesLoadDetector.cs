@@ -76,42 +76,69 @@ namespace Soobak.AssetInsights {
 
     List<ResourcesLoadReference> FindResourcesReferences(string content, string scriptPath) {
       var references = new List<ResourcesLoadReference>();
-      var lines = content.Split('\n');
+      var processedLines = new HashSet<int>(); // Track processed lines to avoid O(n) Any() check
 
-      for (int lineNum = 0; lineNum < lines.Length; lineNum++) {
-        var line = lines[lineNum];
+      var lineNum = 0;
+      var lineStart = 0;
 
-        // Skip comments
-        if (line.TrimStart().StartsWith("//"))
-          continue;
+      // Process line by line without allocating array
+      for (int i = 0; i <= content.Length; i++) {
+        if (i == content.Length || content[i] == '\n') {
+          var lineEnd = i;
+          if (lineEnd > lineStart && content[lineEnd - 1] == '\r')
+            lineEnd--;
 
-        foreach (var pattern in LoadPatterns) {
-          var matches = pattern.Matches(line);
-          foreach (Match match in matches) {
-            if (match.Groups.Count > 1) {
-              references.Add(new ResourcesLoadReference {
-                ScriptPath = scriptPath,
-                LineNumber = lineNum + 1,
-                ResourcePath = match.Groups[1].Value,
-                FullLine = line.Trim(),
-                IsDirectPath = true
-              });
+          var line = content.Substring(lineStart, lineEnd - lineStart);
+          lineNum++;
+
+          // Skip empty lines and comments quickly
+          var trimmedStart = 0;
+          while (trimmedStart < line.Length && char.IsWhiteSpace(line[trimmedStart]))
+            trimmedStart++;
+
+          if (trimmedStart < line.Length - 1 &&
+              line[trimmedStart] == '/' && line[trimmedStart + 1] == '/') {
+            lineStart = i + 1;
+            continue;
+          }
+
+          // Only process lines containing Resources.Load
+          if (line.Contains("Resources.Load")) {
+            var foundDirectPath = false;
+
+            foreach (var pattern in LoadPatterns) {
+              var matches = pattern.Matches(line);
+              foreach (Match match in matches) {
+                if (match.Groups.Count > 1) {
+                  references.Add(new ResourcesLoadReference {
+                    ScriptPath = scriptPath,
+                    LineNumber = lineNum,
+                    ResourcePath = match.Groups[1].Value,
+                    FullLine = line.Trim(),
+                    IsDirectPath = true
+                  });
+                  processedLines.Add(lineNum);
+                  foundDirectPath = true;
+                }
+              }
+            }
+
+            // Check for variable-based loads only if no direct path found
+            if (!foundDirectPath && !processedLines.Contains(lineNum)) {
+              var varMatch = VariableLoadPattern.Match(line);
+              if (varMatch.Success && !varMatch.Groups[1].Value.StartsWith("\"")) {
+                references.Add(new ResourcesLoadReference {
+                  ScriptPath = scriptPath,
+                  LineNumber = lineNum,
+                  ResourcePath = $"<variable: {varMatch.Groups[1].Value}>",
+                  FullLine = line.Trim(),
+                  IsDirectPath = false
+                });
+              }
             }
           }
-        }
 
-        // Check for variable-based loads
-        if (line.Contains("Resources.Load") && !references.Any(r => r.LineNumber == lineNum + 1)) {
-          var varMatch = VariableLoadPattern.Match(line);
-          if (varMatch.Success && !varMatch.Groups[1].Value.StartsWith("\"")) {
-            references.Add(new ResourcesLoadReference {
-              ScriptPath = scriptPath,
-              LineNumber = lineNum + 1,
-              ResourcePath = $"<variable: {varMatch.Groups[1].Value}>",
-              FullLine = line.Trim(),
-              IsDirectPath = false
-            });
-          }
+          lineStart = i + 1;
         }
       }
 

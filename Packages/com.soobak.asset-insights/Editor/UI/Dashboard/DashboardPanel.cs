@@ -10,6 +10,14 @@ namespace Soobak.AssetInsights {
     ScrollView _scrollView;
     HealthScoreResult _cachedResult;
 
+    // Cached analysis results to prevent repeated heavy operations
+    UnusedAssetResult _cachedUnusedResult;
+    OptimizationReport _cachedOptimizationReport;
+    CircularDependencyResult _cachedCircularResult;
+    ResourcesLoadResult _cachedResourcesResult;
+    List<IGrouping<string, AssetNodeModel>> _cachedDuplicates;
+    bool _analysisDirty = true;
+
     public DashboardPanel(DependencyGraph graph) {
       _graph = graph;
       BuildUI();
@@ -25,7 +33,42 @@ namespace Soobak.AssetInsights {
 
     public void SetResult(HealthScoreResult result) {
       _cachedResult = result;
+      _analysisDirty = true;
       Refresh();
+    }
+
+    public void InvalidateCache() {
+      _analysisDirty = true;
+      _cachedUnusedResult = null;
+      _cachedOptimizationReport = null;
+      _cachedCircularResult = null;
+      _cachedResourcesResult = null;
+      _cachedDuplicates = null;
+    }
+
+    void RunAnalysisIfNeeded() {
+      if (!_analysisDirty)
+        return;
+
+      _analysisDirty = false;
+
+      // Run all analysis once and cache results
+      var unusedAnalyzer = new UnusedAssetAnalyzer(_graph);
+      _cachedUnusedResult = unusedAnalyzer.Analyze();
+
+      var engine = new OptimizationEngine(_graph);
+      _cachedOptimizationReport = engine.Analyze();
+
+      var detector = new CircularDependencyDetector(_graph);
+      _cachedCircularResult = detector.Detect();
+
+      var resourcesDetector = new ResourcesLoadDetector(_graph);
+      _cachedResourcesResult = resourcesDetector.Detect();
+
+      _cachedDuplicates = FindDuplicatesInternal();
+
+      // Release memory after heavy analysis
+      EditorUtility.UnloadUnusedAssetsImmediate();
     }
 
     public void Refresh() {
@@ -39,6 +82,9 @@ namespace Soobak.AssetInsights {
         _scrollView.Add(placeholder);
         return;
       }
+
+      // Run analysis once and cache results
+      RunAnalysisIfNeeded();
 
       // Type Breakdown
       AddTypeBreakdownSection();
@@ -161,8 +207,8 @@ namespace Soobak.AssetInsights {
     }
 
     void AddUnusedAssetsSection() {
-      var analyzer = new UnusedAssetAnalyzer(_graph);
-      var result = analyzer.Analyze();
+      var result = _cachedUnusedResult;
+      if (result == null) return;
 
       var headerText = result.TotalUnusedCount == 0
         ? "Unused Assets"
@@ -219,8 +265,8 @@ namespace Soobak.AssetInsights {
     }
 
     void AddOptimizationIssuesSection() {
-      var engine = new OptimizationEngine(_graph);
-      var report = engine.Analyze();
+      var report = _cachedOptimizationReport;
+      if (report == null) return;
 
       var headerText = report.TotalIssues == 0
         ? "Optimization Issues"
@@ -298,8 +344,8 @@ namespace Soobak.AssetInsights {
     }
 
     void AddCircularDependenciesSection() {
-      var detector = new CircularDependencyDetector(_graph);
-      var result = detector.Detect();
+      var result = _cachedCircularResult;
+      if (result == null) return;
 
       var headerText = result.TotalCycles == 0
         ? "Circular Dependencies"
@@ -415,7 +461,8 @@ namespace Soobak.AssetInsights {
     }
 
     void AddDuplicateAssetsSection() {
-      var duplicates = FindDuplicates();
+      var duplicates = _cachedDuplicates;
+      if (duplicates == null) return;
 
       var headerText = duplicates.Count == 0
         ? "Duplicate Assets"
@@ -475,7 +522,7 @@ namespace Soobak.AssetInsights {
       _scrollView.Add(section);
     }
 
-    List<IGrouping<string, AssetNodeModel>> FindDuplicates() {
+    List<IGrouping<string, AssetNodeModel>> FindDuplicatesInternal() {
       return _graph.Nodes.Values
         .GroupBy(n => n.Name)
         .Where(g => g.Count() > 1)
@@ -484,8 +531,8 @@ namespace Soobak.AssetInsights {
     }
 
     void AddResourcesLoadSection() {
-      var detector = new ResourcesLoadDetector(_graph);
-      var result = detector.Detect();
+      var result = _cachedResourcesResult;
+      if (result == null) return;
 
       var headerText = result.TotalReferences == 0
         ? "Dynamic Loading (Resources.Load)"

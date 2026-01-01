@@ -7,6 +7,7 @@ namespace Soobak.AssetInsights {
   /// </summary>
   public class CircularDependencyDetector {
     readonly DependencyGraph _graph;
+    CircularDependencyResult _cachedResult;
 
     int _index;
     Stack<string> _stack;
@@ -19,7 +20,15 @@ namespace Soobak.AssetInsights {
       _graph = graph;
     }
 
+    public void ClearCache() {
+      _cachedResult = null;
+    }
+
     public CircularDependencyResult Detect() {
+      // Return cached result if available
+      if (_cachedResult != null)
+        return _cachedResult;
+
       var result = new CircularDependencyResult();
 
       _index = 0;
@@ -67,6 +76,7 @@ namespace Soobak.AssetInsights {
         .SelectMany(c => c.AssetPaths)
         .ToHashSet();
 
+      _cachedResult = result;
       return result;
     }
 
