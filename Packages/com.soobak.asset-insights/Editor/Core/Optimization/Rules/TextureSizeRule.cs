@@ -19,49 +19,57 @@ namespace Soobak.AssetInsights {
       if (importer == null)
         yield break;
 
-      var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(node.Path);
-      if (texture == null)
-        yield break;
-
-      var maxDimension = Mathf.Max(texture.width, texture.height);
+      // Collect all issues first, then yield them after unloading the texture
+      var issues = new List<OptimizationIssue>();
       var isUITexture = node.Path.Contains("/UI/") || node.Path.Contains("/Sprites/");
-      var threshold = isUITexture ? UITextureMaxSize : MaxRecommendedSize;
 
-      if (maxDimension > threshold) {
-        var currentSize = node.SizeBytes;
-        var reductionFactor = (float)threshold / maxDimension;
-        var estimatedNewSize = (long)(currentSize * reductionFactor * reductionFactor);
-        var savings = currentSize - estimatedNewSize;
+      // Load texture to check dimensions
+      var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(node.Path);
+      if (texture != null) {
+        try {
+          var maxDimension = Mathf.Max(texture.width, texture.height);
+          var threshold = isUITexture ? UITextureMaxSize : MaxRecommendedSize;
 
-        yield return new OptimizationIssue {
-          RuleName = RuleName,
-          AssetPath = node.Path,
-          AssetName = node.Name,
-          Severity = Severity,
-          Message = $"Texture is {texture.width}x{texture.height} (max dimension: {maxDimension}px)",
-          Recommendation = $"Consider reducing to {threshold}px or less for {(isUITexture ? "UI textures" : "general textures")}",
-          PotentialSavings = savings,
-          IsAutoFixable = false
-        };
+          if (maxDimension > threshold) {
+            var currentSize = node.SizeBytes;
+            var reductionFactor = (float)threshold / maxDimension;
+            var estimatedNewSize = (long)(currentSize * reductionFactor * reductionFactor);
+            var savings = currentSize - estimatedNewSize;
+
+            issues.Add(new OptimizationIssue {
+              RuleName = RuleName,
+              AssetPath = node.Path,
+              AssetName = node.Name,
+              Severity = Severity,
+              Message = $"Texture is {texture.width}x{texture.height} (max dimension: {maxDimension}px)",
+              Recommendation = $"Consider reducing to {threshold}px or less for {(isUITexture ? "UI textures" : "general textures")}",
+              PotentialSavings = savings,
+              IsAutoFixable = false
+            });
+          }
+        } finally {
+          // CRITICAL: Unload the texture to free GPU/CPU memory
+          Resources.UnloadAsset(texture);
+        }
       }
 
-      // Check for uncompressed textures
+      // Check importer settings (doesn't require loaded texture)
       if (importer.textureCompression == TextureImporterCompression.Uncompressed) {
-        yield return new OptimizationIssue {
+        issues.Add(new OptimizationIssue {
           RuleName = "Uncompressed Texture",
           AssetPath = node.Path,
           AssetName = node.Name,
           Severity = OptimizationSeverity.Warning,
           Message = "Texture is uncompressed",
           Recommendation = "Enable compression to reduce memory usage",
-          PotentialSavings = node.SizeBytes / 4, // Rough estimate
+          PotentialSavings = node.SizeBytes / 4,
           IsAutoFixable = true
-        };
+        });
       }
 
       // Check for mipmaps on UI textures
       if (isUITexture && importer.mipmapEnabled) {
-        yield return new OptimizationIssue {
+        issues.Add(new OptimizationIssue {
           RuleName = "Unnecessary Mipmaps",
           AssetPath = node.Path,
           AssetName = node.Name,
@@ -70,7 +78,12 @@ namespace Soobak.AssetInsights {
           Recommendation = "Disable mipmaps for UI textures to save memory",
           PotentialSavings = node.SizeBytes / 3,
           IsAutoFixable = true
-        };
+        });
+      }
+
+      // Yield all collected issues
+      foreach (var issue in issues) {
+        yield return issue;
       }
     }
   }

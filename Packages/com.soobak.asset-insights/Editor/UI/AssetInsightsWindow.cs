@@ -647,6 +647,10 @@ namespace Soobak.AssetInsights {
         _dashboardPanel?.SetResult(_cachedHealthResult);
 
         RefreshAssetList();
+
+        // Clean up after analysis
+        DuplicateAssetRule.ClearCache(); // Clear static hash cache to free memory
+        Resources.UnloadUnusedAssets(); // Use async version to avoid blocking the UI
       };
     }
 
