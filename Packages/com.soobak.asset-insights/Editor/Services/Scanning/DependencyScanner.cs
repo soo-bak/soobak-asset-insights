@@ -63,6 +63,7 @@ namespace Soobak.AssetInsights {
 
     List<string> FilterAssets(string[] assets, ScanOptions options) {
       var result = new List<string>();
+      var settings = AssetInsightsSettings.instance;
 
       foreach (var path in assets) {
         if (string.IsNullOrEmpty(path))
@@ -75,6 +76,10 @@ namespace Soobak.AssetInsights {
           continue;
 
         if (path.StartsWith("ProjectSettings/"))
+          continue;
+
+        // Apply ignore/whitelist settings
+        if (settings.ShouldIgnore(path))
           continue;
 
         result.Add(path);

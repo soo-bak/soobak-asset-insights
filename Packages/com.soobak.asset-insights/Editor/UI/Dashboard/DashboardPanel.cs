@@ -57,6 +57,9 @@ namespace Soobak.AssetInsights {
 
       // Duplicate Assets
       AddDuplicateAssetsSection();
+
+      // Dynamic Loading
+      AddResourcesLoadSection();
     }
 
     void AddTypeBreakdownSection() {
@@ -478,6 +481,98 @@ namespace Soobak.AssetInsights {
         .Where(g => g.Count() > 1)
         .OrderByDescending(g => g.Sum(n => n.SizeBytes))
         .ToList();
+    }
+
+    void AddResourcesLoadSection() {
+      var detector = new ResourcesLoadDetector(_graph);
+      var result = detector.Detect();
+
+      var headerText = result.TotalReferences == 0
+        ? "Dynamic Loading (Resources.Load)"
+        : $"Dynamic Loading ({result.TotalReferences} calls)";
+
+      var section = CreateSection(
+        headerText,
+        "Assets loaded via Resources.Load() at runtime - ensure they exist in Resources folder"
+      );
+
+      if (result.TotalReferences == 0) {
+        section.Add(CreateEmptyMessage("No Resources.Load calls found"));
+      } else {
+        // Summary
+        var summaryRow = new VisualElement();
+        summaryRow.style.flexDirection = FlexDirection.Row;
+        summaryRow.style.marginBottom = 8;
+
+        var resolvedLabel = new Label($"Resolved: {result.TotalResolved}");
+        resolvedLabel.style.color = new Color(0.4f, 0.8f, 0.4f);
+        resolvedLabel.style.marginRight = 16;
+        summaryRow.Add(resolvedLabel);
+
+        if (result.TotalUnresolved > 0) {
+          var unresolvedLabel = new Label($"Unresolved: {result.TotalUnresolved}");
+          unresolvedLabel.style.color = new Color(1f, 0.6f, 0.4f);
+          summaryRow.Add(unresolvedLabel);
+        }
+
+        section.Add(summaryRow);
+
+        // Show references
+        var shown = 0;
+        foreach (var reference in result.References.Take(15)) {
+          var refContainer = new VisualElement();
+          refContainer.style.marginBottom = 6;
+          refContainer.style.paddingLeft = 8;
+          refContainer.style.borderLeftWidth = 2;
+          refContainer.style.borderLeftColor = reference.IsResolved
+            ? new Color(0.4f, 0.8f, 0.4f)
+            : new Color(1f, 0.6f, 0.4f);
+
+          // Script info
+          var scriptRow = new VisualElement();
+          scriptRow.style.flexDirection = FlexDirection.Row;
+
+          var scriptLabel = new Label(reference.ScriptName);
+          scriptLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+          scriptLabel.style.fontSize = 11;
+          scriptRow.Add(scriptLabel);
+
+          var lineLabel = new Label($" :{reference.LineNumber}");
+          lineLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
+          lineLabel.style.fontSize = 10;
+          scriptRow.Add(lineLabel);
+
+          refContainer.Add(scriptRow);
+
+          // Resource path
+          var pathLabel = new Label($"Resources.Load(\"{reference.ResourcePath}\")");
+          pathLabel.style.fontSize = 10;
+          pathLabel.style.color = new Color(0.7f, 0.7f, 0.7f);
+          refContainer.Add(pathLabel);
+
+          // Resolved asset (if any)
+          if (reference.IsResolved) {
+            var resolvedRow = CreateClickableRow(reference.ResolvedAssetPath);
+            var arrow = new Label("→ ");
+            arrow.style.color = new Color(0.4f, 0.8f, 0.4f);
+            arrow.style.fontSize = 10;
+            resolvedRow.Insert(0, arrow);
+            refContainer.Add(resolvedRow);
+          }
+
+          section.Add(refContainer);
+          shown++;
+        }
+
+        if (result.TotalReferences > shown) {
+          var more = new Label($"... and {result.TotalReferences - shown} more");
+          more.style.color = new Color(0.5f, 0.5f, 0.5f);
+          more.style.marginTop = 4;
+          section.Add(more);
+        }
+      }
+
+      _scrollView.Add(section);
     }
 
     VisualElement CreateSection(string title, string description = null) {

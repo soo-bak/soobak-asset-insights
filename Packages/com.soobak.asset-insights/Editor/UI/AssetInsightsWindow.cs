@@ -34,15 +34,27 @@ namespace Soobak.AssetInsights {
     Button _scanButton;
     Button _cancelButton;
     Button _exportButton;
+    AssetPreviewPanel _previewPanel;
+    FilterPanel _filterPanel;
+    Button _filterToggleButton;
+    bool _filterVisible;
+
+    // Cached analysis data for filtering
+    HashSet<string> _unusedAssets;
+    HashSet<string> _circularAssets;
+    BuildInclusionAnalyzer _buildAnalyzer;
 
     // View switching
     VisualElement _listContainer;
     VisualElement _dashboardContainer;
+    VisualElement _settingsContainer;
     DashboardPanel _dashboardPanel;
+    SettingsPanel _settingsPanel;
     Button _listTabButton;
     Button _dashboardTabButton;
+    Button _settingsTabButton;
     Button _showGraphButton;
-    int _currentView; // 0=list, 1=dashboard
+    int _currentView; // 0=list, 1=dashboard, 2=settings
 
     [MenuItem("Window/Asset Insights")]
     public static void ShowWindow() {
@@ -72,6 +84,7 @@ namespace Soobak.AssetInsights {
       CreateViewTabs();
       CreateListView();
       CreateDashboardView();
+      CreateSettingsView();
       CreateExportSection();
 
       SwitchToView(0);
@@ -92,6 +105,10 @@ namespace Soobak.AssetInsights {
       _dashboardTabButton.style.flexGrow = 1;
       tabContainer.Add(_dashboardTabButton);
 
+      _settingsTabButton = new Button(() => SwitchToView(2)) { text = "Settings" };
+      _settingsTabButton.style.flexGrow = 1;
+      tabContainer.Add(_settingsTabButton);
+
       _root.Add(tabContainer);
     }
 
@@ -107,14 +124,38 @@ namespace Soobak.AssetInsights {
       _root.Add(_dashboardContainer);
     }
 
+    void CreateSettingsView() {
+      _settingsContainer = new VisualElement();
+      _settingsContainer.style.flexGrow = 1;
+      _settingsContainer.style.flexShrink = 1;
+      _settingsContainer.style.display = DisplayStyle.None;
+
+      _settingsPanel = new SettingsPanel();
+      _settingsContainer.Add(_settingsPanel);
+
+      _root.Add(_settingsContainer);
+    }
+
     void CreateListView() {
       _listContainer = new VisualElement();
       _listContainer.style.flexGrow = 1;
       _listContainer.style.flexShrink = 1;
+      _listContainer.style.flexDirection = FlexDirection.Row;
 
-      CreateSearchSection(_listContainer);
-      CreateListHeader(_listContainer);
-      CreateAssetList(_listContainer);
+      // Left side - list
+      var listSection = new VisualElement();
+      listSection.style.flexGrow = 1;
+      listSection.style.flexShrink = 1;
+
+      CreateSearchSection(listSection);
+      CreateListHeader(listSection);
+      CreateAssetList(listSection);
+
+      _listContainer.Add(listSection);
+
+      // Right side - preview panel
+      _previewPanel = new AssetPreviewPanel(_scanner.Graph);
+      _listContainer.Add(_previewPanel);
 
       _root.Add(_listContainer);
     }
@@ -124,10 +165,12 @@ namespace Soobak.AssetInsights {
 
       _listContainer.style.display = view == 0 ? DisplayStyle.Flex : DisplayStyle.None;
       _dashboardContainer.style.display = view == 1 ? DisplayStyle.Flex : DisplayStyle.None;
+      _settingsContainer.style.display = view == 2 ? DisplayStyle.Flex : DisplayStyle.None;
 
       var activeColor = new Color(0.3f, 0.5f, 0.7f);
       _listTabButton.style.backgroundColor = view == 0 ? activeColor : StyleKeyword.Null;
       _dashboardTabButton.style.backgroundColor = view == 1 ? activeColor : StyleKeyword.Null;
+      _settingsTabButton.style.backgroundColor = view == 2 ? activeColor : StyleKeyword.Null;
 
       if (view == 1 && _cachedHealthResult != null)
         _dashboardPanel?.SetResult(_cachedHealthResult);
@@ -201,12 +244,30 @@ namespace Soobak.AssetInsights {
           placeholder.style.display = DisplayStyle.Flex;
       });
 
+      _filterToggleButton = new Button(ToggleFilter) { text = "Filter" };
+      _filterToggleButton.style.width = 60;
+      container.Add(_filterToggleButton);
+
       _showGraphButton = new Button(OnShowGraphClicked) { text = "Show Graph" };
       _showGraphButton.style.width = 90;
       _showGraphButton.SetEnabled(false);
       container.Add(_showGraphButton);
 
       parent.Add(container);
+
+      // Filter panel (initially hidden)
+      _filterPanel = new FilterPanel();
+      _filterPanel.style.display = DisplayStyle.None;
+      _filterPanel.OnFilterChanged += RefreshAssetList;
+      parent.Add(_filterPanel);
+    }
+
+    void ToggleFilter() {
+      _filterVisible = !_filterVisible;
+      _filterPanel.style.display = _filterVisible ? DisplayStyle.Flex : DisplayStyle.None;
+      _filterToggleButton.style.backgroundColor = _filterVisible
+        ? new Color(0.3f, 0.5f, 0.7f)
+        : StyleKeyword.Null;
     }
 
     void OnShowGraphClicked() {
@@ -327,6 +388,18 @@ namespace Soobak.AssetInsights {
       item.style.paddingLeft = 4;
       item.style.height = 36;
 
+      // Build status indicator
+      var buildDot = new VisualElement { name = "buildDot" };
+      buildDot.style.width = 6;
+      buildDot.style.height = 6;
+      buildDot.style.borderTopLeftRadius = 3;
+      buildDot.style.borderTopRightRadius = 3;
+      buildDot.style.borderBottomLeftRadius = 3;
+      buildDot.style.borderBottomRightRadius = 3;
+      buildDot.style.marginRight = 4;
+      buildDot.style.flexShrink = 0;
+      item.Add(buildDot);
+
       var icon = new Image { name = "icon" };
       icon.style.width = 20;
       icon.style.height = 20;
@@ -382,6 +455,21 @@ namespace Soobak.AssetInsights {
 
       var node = _filteredNodes[index];
 
+      // Build status indicator
+      var buildDot = element.Q<VisualElement>("buildDot");
+      if (_buildAnalyzer != null) {
+        var status = _buildAnalyzer.GetStatus(node.Path);
+        var (color, tooltip) = status switch {
+          BuildInclusionStatus.IncludedInBuild => (new Color(0.4f, 0.8f, 0.4f), "Included in build"),
+          BuildInclusionStatus.Resources => (new Color(0.4f, 0.7f, 1f), "In Resources folder"),
+          BuildInclusionStatus.StreamingAssets => (new Color(0.8f, 0.6f, 1f), "In StreamingAssets"),
+          BuildInclusionStatus.EditorOnly => (new Color(0.6f, 0.6f, 0.6f), "Editor only"),
+          _ => (new Color(1f, 0.5f, 0.3f), "Not included in build")
+        };
+        buildDot.style.backgroundColor = color;
+        buildDot.tooltip = tooltip;
+      }
+
       var icon = element.Q<Image>("icon");
       var assetIcon = AssetDatabase.GetCachedIcon(node.Path);
       icon.image = assetIcon;
@@ -421,6 +509,7 @@ namespace Soobak.AssetInsights {
       }
 
       _showGraphButton?.SetEnabled(!string.IsNullOrEmpty(_selectedAssetPath));
+      _previewPanel?.ShowAsset(_selectedAssetPath);
     }
 
     void StartScan() {
@@ -471,6 +560,19 @@ namespace Soobak.AssetInsights {
       EditorApplication.delayCall += () => {
         var calculator = new HealthScoreCalculator(graph);
         _cachedHealthResult = calculator.Calculate();
+
+        // Cache analysis data for filtering
+        var unusedAnalyzer = new UnusedAssetAnalyzer(graph);
+        var unusedResult = unusedAnalyzer.Analyze();
+        _unusedAssets = unusedResult.UnusedAssets.Select(a => a.Path).ToHashSet();
+
+        var circularDetector = new CircularDependencyDetector(graph);
+        var circularResult = circularDetector.Detect();
+        _circularAssets = circularResult.AssetsInCycles;
+
+        // Build inclusion analysis
+        _buildAnalyzer = new BuildInclusionAnalyzer(graph);
+        _buildAnalyzer.Analyze();
 
         _progressBar.title = $"Complete - {graph.NodeCount} assets ({AssetNodeModel.FormatBytes(graph.GetTotalSize())})";
         _statusLabel.text = $"Health: {_cachedHealthResult.Grade} ({_cachedHealthResult.Score}/100)";
@@ -523,10 +625,18 @@ namespace Soobak.AssetInsights {
       var search = _searchField?.value?.ToLowerInvariant() ?? "";
       _filteredNodes = _scanner.Graph.Nodes.Values.ToList();
 
+      // Apply text search
       if (!string.IsNullOrEmpty(search)) {
         _filteredNodes = _filteredNodes.FindAll(n =>
           n.Name.ToLowerInvariant().Contains(search) ||
           n.Path.ToLowerInvariant().Contains(search));
+      }
+
+      // Apply filter panel filters
+      if (_filterPanel != null && _filterVisible) {
+        var engine = (_filterPanel.HasIssuesOnly) ? new OptimizationEngine(_scanner.Graph) : null;
+        _filteredNodes = _filteredNodes.FindAll(n =>
+          _filterPanel.PassesFilter(n, _scanner.Graph, _unusedAssets, _circularAssets, engine));
       }
 
       // Apply sorting

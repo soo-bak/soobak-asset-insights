@@ -15,6 +15,8 @@ namespace Soobak.AssetInsights {
       _rules.Add(new TextureSizeRule());
       _rules.Add(new AudioCompressionRule());
       _rules.Add(new DuplicateAssetRule());
+      _rules.Add(new MeshOptimizationRule());
+      _rules.Add(new MaterialOptimizationRule());
     }
 
     public void RegisterRule(IOptimizationRule rule) {
