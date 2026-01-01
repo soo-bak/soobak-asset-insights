@@ -683,16 +683,20 @@ namespace Soobak.AssetInsights {
 
       // Use single allocation for filtered list
       var nodes = _scanner.Graph.Nodes.Values;
+      var nodeCount = _scanner.Graph.NodeCount;
 
       // Apply text search using cached lowercase
       if (!string.IsNullOrEmpty(search)) {
-        _filteredNodes = new List<AssetNodeModel>(nodes.Count);
+        _filteredNodes = new List<AssetNodeModel>(nodeCount);
         foreach (var n in nodes) {
           if (n.NameLower.Contains(search) || n.PathLower.Contains(search))
             _filteredNodes.Add(n);
         }
       } else {
-        _filteredNodes = new List<AssetNodeModel>(nodes);
+        _filteredNodes = new List<AssetNodeModel>(nodeCount);
+        foreach (var n in nodes) {
+          _filteredNodes.Add(n);
+        }
       }
 
       // Apply filter panel filters
