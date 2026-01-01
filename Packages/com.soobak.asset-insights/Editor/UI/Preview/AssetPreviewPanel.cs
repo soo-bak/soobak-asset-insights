@@ -21,9 +21,16 @@ namespace Soobak.AssetInsights {
     string _currentPath;
     Editor _previewEditor;
 
+    // Cached optimization engine - passed from parent to avoid duplicate creation
+    OptimizationEngine _cachedEngine;
+
     public AssetPreviewPanel(DependencyGraph graph) {
       _graph = graph;
       BuildUI();
+    }
+
+    public void SetOptimizationEngine(OptimizationEngine engine) {
+      _cachedEngine = engine;
     }
 
     void BuildUI() {
@@ -147,11 +154,12 @@ namespace Soobak.AssetInsights {
         refs.Count > 10 ? $"... and {refs.Count - 10} more" : null
       ));
 
-      // Optimization issues
-      var engine = new OptimizationEngine(_graph);
-      var issues = engine.AnalyzeAsset(assetPath).ToList();
-      if (issues.Count > 0) {
-        _detailsContainer.Add(CreateIssuesSection(issues));
+      // Optimization issues - use cached engine to avoid duplicate creation
+      if (_cachedEngine != null) {
+        var issues = _cachedEngine.AnalyzeAsset(assetPath).ToList();
+        if (issues.Count > 0) {
+          _detailsContainer.Add(CreateIssuesSection(issues));
+        }
       }
 
       // Action buttons
@@ -165,13 +173,16 @@ namespace Soobak.AssetInsights {
         _previewEditor = null;
       }
 
+      // Clear previous image reference to allow GC
+      _previewImage.image = null;
+
       var asset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
       if (asset == null) {
-        _previewImage.image = null;
         return;
       }
 
-      // Try to get asset preview
+      // Try to get asset preview - these are cached by Unity internally
+      // We just display them, Unity manages the texture lifecycle
       var preview = AssetPreview.GetAssetPreview(asset);
       if (preview != null) {
         _previewImage.image = preview;
@@ -338,11 +349,29 @@ namespace Soobak.AssetInsights {
       return container;
     }
 
-    public void OnDisable() {
+    public void Cleanup() {
+      // Clean up editor
       if (_previewEditor != null) {
         Object.DestroyImmediate(_previewEditor);
         _previewEditor = null;
       }
+
+      // Clear image reference to allow texture GC
+      if (_previewImage != null) {
+        _previewImage.image = null;
+      }
+
+      // Clear cached references
+      _cachedEngine = null;
+      _currentPath = null;
+
+      // Clear details container
+      _detailsContainer?.Clear();
+    }
+
+    // Keep OnDisable for backward compatibility
+    public void OnDisable() {
+      Cleanup();
     }
   }
 }

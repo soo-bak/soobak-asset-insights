@@ -9,8 +9,8 @@ namespace Soobak.AssetInsights {
   public class FilterPanel : VisualElement {
     public event Action OnFilterChanged;
 
-    // Debouncing for slider changes
-    double _lastFilterChangeTime;
+    // Debouncing for slider changes - use single scheduled callback pattern
+    double _scheduledFilterTime;
     bool _filterChangeScheduled;
     const double FilterDebounceDelay = 0.1; // 100ms
 
@@ -46,20 +46,31 @@ namespace Soobak.AssetInsights {
     }
 
     void NotifyFilterChangedDebounced() {
-      _lastFilterChangeTime = EditorApplication.timeSinceStartup;
+      // Schedule the filter change for later - only register ONE callback
+      _scheduledFilterTime = EditorApplication.timeSinceStartup + FilterDebounceDelay;
+
       if (!_filterChangeScheduled) {
         _filterChangeScheduled = true;
-        EditorApplication.delayCall += ProcessDebouncedFilterChange;
+        EditorApplication.update += ProcessDebouncedFilterChange;
       }
     }
 
     void ProcessDebouncedFilterChange() {
-      _filterChangeScheduled = false;
-      if (EditorApplication.timeSinceStartup - _lastFilterChangeTime >= FilterDebounceDelay) {
+      // Check if enough time has passed since last change
+      if (EditorApplication.timeSinceStartup >= _scheduledFilterTime) {
+        // Unregister BEFORE invoking to prevent re-entry issues
+        EditorApplication.update -= ProcessDebouncedFilterChange;
+        _filterChangeScheduled = false;
         OnFilterChanged?.Invoke();
-      } else {
-        // Reschedule if still within debounce window
-        EditorApplication.delayCall += ProcessDebouncedFilterChange;
+      }
+      // If not enough time passed, keep waiting (update will be called again next frame)
+    }
+
+    public void Cleanup() {
+      // Call this when the panel is being destroyed
+      if (_filterChangeScheduled) {
+        EditorApplication.update -= ProcessDebouncedFilterChange;
+        _filterChangeScheduled = false;
       }
     }
 

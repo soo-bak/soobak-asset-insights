@@ -13,14 +13,28 @@ namespace Soobak.AssetInsights {
     // Cached analysis results to prevent repeated heavy operations
     UnusedAssetResult _cachedUnusedResult;
     OptimizationReport _cachedOptimizationReport;
+    OptimizationEngine _cachedOptimizationEngine;
     CircularDependencyResult _cachedCircularResult;
     ResourcesLoadResult _cachedResourcesResult;
     List<IGrouping<string, AssetNodeModel>> _cachedDuplicates;
+    HashSet<string> _cachedUnusedAssets;
+    HashSet<string> _cachedCircularAssets;
     bool _analysisDirty = true;
+    bool _hasExternalCache;
 
     public DashboardPanel(DependencyGraph graph) {
       _graph = graph;
       BuildUI();
+    }
+
+    /// <summary>
+    /// Set cached analysis data from parent window to avoid duplicate computation.
+    /// </summary>
+    public void SetCachedAnalysisData(OptimizationEngine engine, HashSet<string> unusedAssets, HashSet<string> circularAssets) {
+      _cachedOptimizationEngine = engine;
+      _cachedUnusedAssets = unusedAssets;
+      _cachedCircularAssets = circularAssets;
+      _hasExternalCache = true;
     }
 
     void BuildUI() {
@@ -44,6 +58,12 @@ namespace Soobak.AssetInsights {
       _cachedCircularResult = null;
       _cachedResourcesResult = null;
       _cachedDuplicates = null;
+      // Don't clear external cache - it's managed by parent window
+      if (!_hasExternalCache) {
+        _cachedOptimizationEngine = null;
+        _cachedUnusedAssets = null;
+        _cachedCircularAssets = null;
+      }
     }
 
     void RunAnalysisIfNeeded() {
@@ -52,20 +72,40 @@ namespace Soobak.AssetInsights {
 
       _analysisDirty = false;
 
-      // Run all analysis once and cache results
-      var unusedAnalyzer = new UnusedAssetAnalyzer(_graph);
-      _cachedUnusedResult = unusedAnalyzer.Analyze();
+      // Use cached engine from parent if available, otherwise create new one
+      OptimizationEngine engine;
+      if (_cachedOptimizationEngine != null) {
+        engine = _cachedOptimizationEngine;
+        // Use cached report if engine already analyzed, otherwise analyze now
+        _cachedOptimizationReport = engine.LastReport ?? engine.Analyze();
+      } else {
+        engine = new OptimizationEngine(_graph);
+        _cachedOptimizationReport = engine.Analyze();
+        _cachedOptimizationEngine = engine;
+      }
 
-      var engine = new OptimizationEngine(_graph);
-      _cachedOptimizationReport = engine.Analyze();
+      // Unused analysis - reuse if available from parent
+      if (_cachedUnusedResult == null) {
+        var unusedAnalyzer = new UnusedAssetAnalyzer(_graph);
+        _cachedUnusedResult = unusedAnalyzer.Analyze();
+      }
 
-      var detector = new CircularDependencyDetector(_graph);
-      _cachedCircularResult = detector.Detect();
+      // Circular dependency detection
+      if (_cachedCircularResult == null) {
+        var detector = new CircularDependencyDetector(_graph);
+        _cachedCircularResult = detector.Detect();
+      }
 
-      var resourcesDetector = new ResourcesLoadDetector(_graph);
-      _cachedResourcesResult = resourcesDetector.Detect();
+      // Resources.Load detection
+      if (_cachedResourcesResult == null) {
+        var resourcesDetector = new ResourcesLoadDetector(_graph);
+        _cachedResourcesResult = resourcesDetector.Detect();
+      }
 
-      _cachedDuplicates = FindDuplicatesInternal();
+      // Duplicate detection
+      if (_cachedDuplicates == null) {
+        _cachedDuplicates = FindDuplicatesInternal();
+      }
 
       // Release memory after heavy analysis
       EditorUtility.UnloadUnusedAssetsImmediate();
@@ -713,6 +753,29 @@ namespace Soobak.AssetInsights {
         AssetType.Shader => new Color(0.9f, 0.4f, 0.7f),
         _ => new Color(0.5f, 0.5f, 0.5f)
       };
+    }
+
+    /// <summary>
+    /// Cleanup resources when the panel is being destroyed.
+    /// </summary>
+    public void Cleanup() {
+      // Clear all cached data
+      _cachedResult = null;
+      _cachedUnusedResult = null;
+      _cachedOptimizationReport = null;
+      _cachedCircularResult = null;
+      _cachedResourcesResult = null;
+      _cachedDuplicates = null;
+
+      // Don't null external cache references - they're managed by parent
+      if (!_hasExternalCache) {
+        _cachedOptimizationEngine = null;
+        _cachedUnusedAssets = null;
+        _cachedCircularAssets = null;
+      }
+
+      // Clear UI
+      _scrollView?.Clear();
     }
   }
 }

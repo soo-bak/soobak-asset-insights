@@ -45,9 +45,10 @@ namespace Soobak.AssetInsights {
     BuildInclusionAnalyzer _buildAnalyzer;
     OptimizationEngine _cachedOptimizationEngine;
 
-    // Search debouncing
-    double _lastSearchTime;
+    // Search debouncing - use single scheduled callback pattern
+    double _scheduledSearchTime;
     string _pendingSearch;
+    bool _searchScheduled;
     const double SearchDebounceDelay = 0.15; // 150ms
 
     // View switching
@@ -76,6 +77,21 @@ namespace Soobak.AssetInsights {
 
     void OnDisable() {
       CancelScan();
+      CleanupSearchDebounce();
+      _filterPanel?.Cleanup();
+      _previewPanel?.Cleanup();
+      _dashboardPanel?.Cleanup();
+
+      // Clear cached analysis data
+      _cachedOptimizationEngine = null;
+      _unusedAssets = null;
+      _circularAssets = null;
+      _buildAnalyzer = null;
+      _cachedHealthResult = null;
+
+      // Clear filtered nodes list
+      _filteredNodes?.Clear();
+      _filteredNodes = null;
     }
 
     void CreateGUI() {
@@ -500,15 +516,31 @@ namespace Soobak.AssetInsights {
     void OnSearchChanged(ChangeEvent<string> evt) {
       // Debounce search to avoid excessive refreshes during typing
       _pendingSearch = evt.newValue;
-      _lastSearchTime = EditorApplication.timeSinceStartup;
-      EditorApplication.delayCall += ProcessDebouncedSearch;
+      _scheduledSearchTime = EditorApplication.timeSinceStartup + SearchDebounceDelay;
+
+      if (!_searchScheduled) {
+        _searchScheduled = true;
+        EditorApplication.update += ProcessDebouncedSearch;
+      }
     }
 
     void ProcessDebouncedSearch() {
-      if (EditorApplication.timeSinceStartup - _lastSearchTime >= SearchDebounceDelay) {
+      if (EditorApplication.timeSinceStartup >= _scheduledSearchTime) {
+        // Unregister BEFORE processing to prevent re-entry issues
+        EditorApplication.update -= ProcessDebouncedSearch;
+        _searchScheduled = false;
+
         if (_searchField?.value == _pendingSearch) {
           RefreshAssetList();
         }
+      }
+      // If not enough time passed, keep waiting (update will be called again next frame)
+    }
+
+    void CleanupSearchDebounce() {
+      if (_searchScheduled) {
+        EditorApplication.update -= ProcessDebouncedSearch;
+        _searchScheduled = false;
       }
     }
 
@@ -589,9 +621,15 @@ namespace Soobak.AssetInsights {
         _buildAnalyzer = new BuildInclusionAnalyzer(graph);
         _buildAnalyzer.Analyze();
 
-        // Cache optimization engine for filtering
+        // Cache optimization engine for filtering and preview panel
         _cachedOptimizationEngine = new OptimizationEngine(graph);
         _cachedOptimizationEngine.Analyze();
+
+        // Share cached engine with preview panel to avoid duplicate creation
+        _previewPanel?.SetOptimizationEngine(_cachedOptimizationEngine);
+
+        // Share cached data with dashboard panel
+        _dashboardPanel?.SetCachedAnalysisData(_cachedOptimizationEngine, _unusedAssets, _circularAssets);
 
         _progressBar.title = $"Complete - {graph.NodeCount} assets ({AssetNodeModel.FormatBytes(graph.GetTotalSize())})";
         _statusLabel.text = $"Health: {_cachedHealthResult.Grade} ({_cachedHealthResult.Score}/100)";

@@ -9,6 +9,11 @@ namespace Soobak.AssetInsights {
     OptimizationReport _cachedReport;
     readonly Dictionary<string, List<OptimizationIssue>> _assetIssueCache = new();
 
+    /// <summary>
+    /// Returns the cached report from the last Analyze() call, or null if not yet analyzed.
+    /// </summary>
+    public OptimizationReport LastReport => _cachedReport;
+
     public OptimizationEngine(DependencyGraph graph) {
       _graph = graph;
       RegisterDefaultRules();
