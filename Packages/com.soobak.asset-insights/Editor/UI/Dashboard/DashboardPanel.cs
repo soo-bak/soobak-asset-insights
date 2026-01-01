@@ -60,13 +60,16 @@ namespace Soobak.AssetInsights {
     }
 
     void AddTypeBreakdownSection() {
-      var section = CreateSection("Type Breakdown");
-
       var byType = _graph.GetSizeByType()
         .OrderByDescending(kv => kv.Value.totalSize)
         .ToList();
 
       var totalSize = _graph.GetTotalSize();
+
+      var section = CreateSection(
+        $"Type Breakdown ({byType.Count} types)",
+        "Distribution of assets by file type and their storage usage"
+      );
 
       foreach (var kv in byType) {
         var row = CreateRow();
@@ -118,9 +121,13 @@ namespace Soobak.AssetInsights {
     }
 
     void AddLargestAssetsSection() {
-      var section = CreateSection("Largest Assets (Top 10)");
-
       var largest = _graph.GetNodesBySize(10);
+      var totalLargeSize = largest.Sum(n => n.SizeBytes);
+
+      var section = CreateSection(
+        $"Largest Assets (Top 10)",
+        $"Files consuming the most storage space ({AssetNodeModel.FormatBytes(totalLargeSize)} total)"
+      );
 
       foreach (var node in largest) {
         var row = CreateClickableRow(node.Path);
@@ -151,15 +158,22 @@ namespace Soobak.AssetInsights {
     }
 
     void AddUnusedAssetsSection() {
-      var section = CreateSection("Unused Assets");
-
       var analyzer = new UnusedAssetAnalyzer(_graph);
       var result = analyzer.Analyze();
+
+      var headerText = result.TotalUnusedCount == 0
+        ? "Unused Assets"
+        : $"Unused Assets ({result.TotalUnusedCount})";
+
+      var section = CreateSection(
+        headerText,
+        "Assets not referenced by any scene or other asset - safe to delete"
+      );
 
       if (result.TotalUnusedCount == 0) {
         section.Add(CreateEmptyMessage("No unused assets found"));
       } else {
-        var summary = new Label($"{result.TotalUnusedCount} unused assets ({AssetNodeModel.FormatBytes(result.TotalUnusedSize)})");
+        var summary = new Label($"Total wasted space: {AssetNodeModel.FormatBytes(result.TotalUnusedSize)}");
         summary.style.marginBottom = 8;
         summary.style.color = new Color(1f, 0.6f, 0.4f);
         section.Add(summary);
@@ -202,10 +216,19 @@ namespace Soobak.AssetInsights {
     }
 
     void AddOptimizationIssuesSection() {
-      var section = CreateSection("Optimization Issues");
-
       var engine = new OptimizationEngine(_graph);
       var report = engine.Analyze();
+
+      var headerText = report.TotalIssues == 0
+        ? "Optimization Issues"
+        : $"Optimization Issues ({report.TotalIssues})";
+
+      var potentialSavings = report.Issues.Sum(i => i.PotentialSavings);
+      var description = potentialSavings > 0
+        ? $"Potential size reduction: {AssetNodeModel.FormatBytes(potentialSavings)}"
+        : "Texture, audio, and import settings that can be improved";
+
+      var section = CreateSection(headerText, description);
 
       if (report.TotalIssues == 0) {
         section.Add(CreateEmptyMessage("No optimization issues found"));
@@ -272,18 +295,21 @@ namespace Soobak.AssetInsights {
     }
 
     void AddCircularDependenciesSection() {
-      var section = CreateSection("Circular Dependencies");
-
       var detector = new CircularDependencyDetector(_graph);
       var result = detector.Detect();
+
+      var headerText = result.TotalCycles == 0
+        ? "Circular Dependencies"
+        : $"Circular Dependencies ({result.TotalCycles})";
+
+      var section = CreateSection(
+        headerText,
+        "Assets that reference each other in a loop - can cause loading issues"
+      );
 
       if (result.TotalCycles == 0) {
         section.Add(CreateEmptyMessage("No circular dependencies found"));
       } else {
-        var summary = new Label($"{result.TotalCycles} cycles detected");
-        summary.style.marginBottom = 8;
-        summary.style.color = new Color(1f, 0.4f, 0.4f);
-        section.Add(summary);
 
         var shown = 0;
         foreach (var cycle in result.Cycles.Take(10)) {
@@ -326,9 +352,18 @@ namespace Soobak.AssetInsights {
     }
 
     void AddDuplicateAssetsSection() {
-      var section = CreateSection("Duplicate Assets");
-
       var duplicates = FindDuplicates();
+
+      var headerText = duplicates.Count == 0
+        ? "Duplicate Assets"
+        : $"Duplicate Assets ({duplicates.Count} groups)";
+
+      var wastedSize = duplicates.Sum(g => g.Skip(1).Sum(n => n.SizeBytes));
+      var description = wastedSize > 0
+        ? $"Same file names in multiple locations - {AssetNodeModel.FormatBytes(wastedSize)} wasted"
+        : "Files with the same name in multiple locations";
+
+      var section = CreateSection(headerText, description);
 
       if (duplicates.Count == 0) {
         section.Add(CreateEmptyMessage("No duplicate assets found"));
@@ -385,7 +420,7 @@ namespace Soobak.AssetInsights {
         .ToList();
     }
 
-    VisualElement CreateSection(string title) {
+    VisualElement CreateSection(string title, string description = null) {
       var section = new VisualElement();
       section.style.marginBottom = 16;
       section.style.paddingTop = 12;
@@ -398,14 +433,26 @@ namespace Soobak.AssetInsights {
       section.style.borderBottomLeftRadius = 6;
       section.style.borderBottomRightRadius = 6;
 
+      var headerContainer = new VisualElement();
+      headerContainer.style.marginBottom = 8;
+      headerContainer.style.paddingBottom = 8;
+      headerContainer.style.borderBottomWidth = 1;
+      headerContainer.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f);
+
       var header = new Label(title);
       header.style.fontSize = 14;
       header.style.unityFontStyleAndWeight = FontStyle.Bold;
-      header.style.marginBottom = 8;
-      header.style.paddingBottom = 8;
-      header.style.borderBottomWidth = 1;
-      header.style.borderBottomColor = new Color(0.3f, 0.3f, 0.3f);
-      section.Add(header);
+      headerContainer.Add(header);
+
+      if (!string.IsNullOrEmpty(description)) {
+        var desc = new Label(description);
+        desc.style.fontSize = 11;
+        desc.style.color = new Color(0.6f, 0.6f, 0.6f);
+        desc.style.marginTop = 2;
+        headerContainer.Add(desc);
+      }
+
+      section.Add(headerContainer);
 
       return section;
     }
