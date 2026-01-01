@@ -142,7 +142,8 @@ namespace Soobak.AssetInsights {
           Message = "GPU Instancing is disabled",
           Recommendation = "Enable GPU Instancing for better batching performance",
           PotentialSavings = 0,
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.MaterialEnableGPUInstancing
         });
       }
 

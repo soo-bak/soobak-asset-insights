@@ -63,7 +63,8 @@ namespace Soobak.AssetInsights {
           Message = "Texture is uncompressed",
           Recommendation = "Enable compression to reduce memory usage",
           PotentialSavings = node.SizeBytes / 4,
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.TextureEnableCompression
         });
       }
 
@@ -77,7 +78,8 @@ namespace Soobak.AssetInsights {
           Message = "UI texture has mipmaps enabled",
           Recommendation = "Disable mipmaps for UI textures to save memory",
           PotentialSavings = node.SizeBytes / 3,
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.TextureDisableMipmaps
         });
       }
 

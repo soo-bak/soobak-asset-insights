@@ -30,7 +30,8 @@ namespace Soobak.AssetInsights {
           Message = "Audio is uncompressed (PCM)",
           Recommendation = "Use Vorbis or ADPCM compression for most audio",
           PotentialSavings = node.SizeBytes * 3 / 4, // Vorbis typically 75% smaller
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.AudioEnableCompression
         };
       }
 
@@ -44,7 +45,8 @@ namespace Soobak.AssetInsights {
           Message = $"Large audio file ({node.FormattedSize}) is not set to streaming",
           Recommendation = "Enable streaming for large audio files to reduce memory usage",
           PotentialSavings = 0, // Memory savings, not disk
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.AudioEnableStreaming
         };
       }
 
@@ -58,7 +60,8 @@ namespace Soobak.AssetInsights {
           Message = "Sound effect is stereo",
           Recommendation = "Consider using mono for sound effects to save 50% size",
           PotentialSavings = node.SizeBytes / 2,
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.AudioForceToMono
         };
       }
     }

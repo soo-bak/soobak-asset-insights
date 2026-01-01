@@ -94,7 +94,8 @@ namespace Soobak.AssetInsights {
           Message = "Animation import enabled but no animations found",
           Recommendation = "Disable animation import for static meshes",
           PotentialSavings = 0,
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.MeshDisableAnimation
         };
       }
     }
@@ -110,7 +111,8 @@ namespace Soobak.AssetInsights {
           Message = "Mesh has Read/Write enabled (doubles memory usage)",
           Recommendation = "Disable Read/Write if mesh is not modified at runtime",
           PotentialSavings = node.SizeBytes / 2,
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.MeshDisableReadWrite
         };
       }
 
@@ -124,7 +126,8 @@ namespace Soobak.AssetInsights {
           Message = "Mesh compression is disabled",
           Recommendation = "Enable mesh compression to reduce file size",
           PotentialSavings = node.SizeBytes / 4,
-          IsAutoFixable = true
+          IsAutoFixable = true,
+          FixType = FixType.MeshEnableCompression
         };
       }
 
@@ -145,7 +148,8 @@ namespace Soobak.AssetInsights {
               Message = "Simple mesh has tangent import enabled",
               Recommendation = "Disable tangent import for simple UI meshes",
               PotentialSavings = node.SizeBytes / 8,
-              IsAutoFixable = true
+              IsAutoFixable = true,
+              FixType = FixType.MeshDisableTangents
             };
           }
         }

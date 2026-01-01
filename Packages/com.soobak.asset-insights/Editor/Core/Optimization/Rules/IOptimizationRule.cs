@@ -18,6 +18,7 @@ namespace Soobak.AssetInsights {
     public OptimizationSeverity Severity { get; set; }
     public long PotentialSavings { get; set; }
     public bool IsAutoFixable { get; set; }
+    public FixType FixType { get; set; } = FixType.None;
 
     public string FormattedSavings => AssetNodeModel.FormatBytes(PotentialSavings);
   }
@@ -26,5 +27,30 @@ namespace Soobak.AssetInsights {
     Info,
     Warning,
     Error
+  }
+
+  /// <summary>
+  /// Types of automatic fixes that can be applied to assets.
+  /// </summary>
+  public enum FixType {
+    None,
+
+    // Texture fixes
+    TextureEnableCompression,
+    TextureDisableMipmaps,
+
+    // Audio fixes
+    AudioEnableCompression,
+    AudioEnableStreaming,
+    AudioForceToMono,
+
+    // Material fixes
+    MaterialEnableGPUInstancing,
+
+    // Mesh fixes
+    MeshDisableReadWrite,
+    MeshEnableCompression,
+    MeshDisableAnimation,
+    MeshDisableTangents
   }
 }

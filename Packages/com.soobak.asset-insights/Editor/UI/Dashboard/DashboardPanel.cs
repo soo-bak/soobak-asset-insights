@@ -332,6 +332,39 @@ namespace Soobak.AssetInsights {
       if (report.TotalIssues == 0) {
         section.Add(CreateEmptyMessage("No optimization issues found"));
       } else {
+        // Fix All button for auto-fixable issues
+        var fixableIssues = report.Issues.Where(i => i.IsAutoFixable).ToList();
+        if (fixableIssues.Count > 0) {
+          var fixAllRow = new VisualElement();
+          fixAllRow.style.flexDirection = FlexDirection.Row;
+          fixAllRow.style.justifyContent = Justify.FlexEnd;
+          fixAllRow.style.marginBottom = 8;
+
+          var fixAllBtn = new Button(() => {
+            if (EditorUtility.DisplayDialog(
+              "Fix All Issues",
+              $"Apply {fixableIssues.Count} automatic fix(es)?\n\nThis will modify import settings for multiple assets.",
+              "Fix All", "Cancel")) {
+              var results = AssetFixer.ApplyFixes(fixableIssues);
+              var successCount = results.Count(r => r.Success);
+              EditorUtility.DisplayDialog(
+                "Fix Complete",
+                $"Successfully applied {successCount}/{results.Count} fixes.",
+                "OK");
+              // Invalidate cache and refresh
+              InvalidateCache();
+              Refresh();
+            }
+          });
+          fixAllBtn.text = $"Fix All ({fixableIssues.Count})";
+          fixAllBtn.style.backgroundColor = new Color(0.2f, 0.5f, 0.3f);
+          fixAllBtn.style.paddingLeft = 12;
+          fixAllBtn.style.paddingRight = 12;
+          fixAllRow.Add(fixAllBtn);
+
+          section.Add(fixAllRow);
+        }
+
         foreach (var issue in report.Issues.Take(20)) {
           var row = CreateClickableRow(issue.AssetPath);
           row.style.flexDirection = FlexDirection.Column;
@@ -362,7 +395,14 @@ namespace Soobak.AssetInsights {
           if (issue.PotentialSavings > 0) {
             var savingsLabel = new Label($"-{AssetNodeModel.FormatBytes(issue.PotentialSavings)}");
             savingsLabel.style.color = new Color(0.4f, 0.8f, 0.4f);
+            savingsLabel.style.marginRight = 8;
             headerRow.Add(savingsLabel);
+          }
+
+          // Add fix button if auto-fixable
+          if (issue.IsAutoFixable) {
+            var fixBtn = CreateFixButton(issue);
+            headerRow.Add(fixBtn);
           }
 
           row.Add(headerRow);
@@ -391,6 +431,27 @@ namespace Soobak.AssetInsights {
       }
 
       _scrollView.Add(section);
+    }
+
+    Button CreateFixButton(OptimizationIssue issue) {
+      var fixBtn = new Button(() => {
+        var result = AssetFixer.ApplyFix(issue);
+        if (result.Success) {
+          EditorUtility.DisplayDialog("Fix Applied", result.Message, "OK");
+          InvalidateCache();
+          Refresh();
+        } else {
+          EditorUtility.DisplayDialog("Fix Failed", result.Message, "OK");
+        }
+      });
+      fixBtn.text = "Fix";
+      fixBtn.tooltip = AssetFixer.GetFixDescription(issue.FixType);
+      fixBtn.style.fontSize = 10;
+      fixBtn.style.height = 18;
+      fixBtn.style.paddingLeft = 8;
+      fixBtn.style.paddingRight = 8;
+      fixBtn.style.backgroundColor = new Color(0.2f, 0.5f, 0.3f);
+      return fixBtn;
     }
 
     void AddCircularDependenciesSection() {

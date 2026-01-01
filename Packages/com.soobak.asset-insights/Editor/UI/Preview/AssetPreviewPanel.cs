@@ -299,16 +299,58 @@ namespace Soobak.AssetInsights {
       section.style.borderBottomLeftRadius = 4;
       section.style.borderBottomRightRadius = 4;
 
+      // Header with Fix All button
+      var headerRow = new VisualElement();
+      headerRow.style.flexDirection = FlexDirection.Row;
+      headerRow.style.alignItems = Align.Center;
+      headerRow.style.marginBottom = 4;
+
       var header = new Label($"Issues ({issues.Count})");
       header.style.unityFontStyleAndWeight = FontStyle.Bold;
       header.style.fontSize = 11;
-      header.style.marginBottom = 4;
       header.style.color = new Color(1f, 0.7f, 0.7f);
-      section.Add(header);
+      header.style.flexGrow = 1;
+      headerRow.Add(header);
+
+      // Fix All button if there are auto-fixable issues
+      var fixableIssues = issues.Where(i => i.IsAutoFixable).ToList();
+      if (fixableIssues.Count > 0) {
+        var fixAllBtn = new Button(() => {
+          if (EditorUtility.DisplayDialog(
+            "Fix All Issues",
+            $"Apply {fixableIssues.Count} automatic fix(es) to this asset?\n\nThis will modify import settings.",
+            "Fix All", "Cancel")) {
+            var results = AssetFixer.ApplyFixes(fixableIssues);
+            var successCount = results.Count(r => r.Success);
+            EditorUtility.DisplayDialog(
+              "Fix Complete",
+              $"Successfully applied {successCount}/{results.Count} fixes.",
+              "OK");
+            // Refresh the view
+            if (!string.IsNullOrEmpty(_currentPath)) {
+              ShowAsset(_currentPath);
+            }
+          }
+        });
+        fixAllBtn.text = $"Fix All ({fixableIssues.Count})";
+        fixAllBtn.style.fontSize = 9;
+        fixAllBtn.style.height = 18;
+        fixAllBtn.style.paddingLeft = 6;
+        fixAllBtn.style.paddingRight = 6;
+        fixAllBtn.style.backgroundColor = new Color(0.2f, 0.5f, 0.3f);
+        headerRow.Add(fixAllBtn);
+      }
+
+      section.Add(headerRow);
 
       foreach (var issue in issues.Take(5)) {
         var issueRow = new VisualElement();
-        issueRow.style.marginBottom = 4;
+        issueRow.style.marginBottom = 6;
+
+        // Title row with fix button
+        var titleRow = new VisualElement();
+        titleRow.style.flexDirection = FlexDirection.Row;
+        titleRow.style.alignItems = Align.Center;
 
         var severityColor = issue.Severity switch {
           OptimizationSeverity.Error => new Color(1f, 0.4f, 0.4f),
@@ -320,7 +362,16 @@ namespace Soobak.AssetInsights {
         ruleLabel.style.fontSize = 10;
         ruleLabel.style.color = severityColor;
         ruleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-        issueRow.Add(ruleLabel);
+        ruleLabel.style.flexGrow = 1;
+        titleRow.Add(ruleLabel);
+
+        // Add fix button if auto-fixable
+        if (issue.IsAutoFixable) {
+          var fixBtn = CreateFixButton(issue);
+          titleRow.Add(fixBtn);
+        }
+
+        issueRow.Add(titleRow);
 
         var msgLabel = new Label(issue.Message);
         msgLabel.style.fontSize = 9;
@@ -332,6 +383,30 @@ namespace Soobak.AssetInsights {
       }
 
       return section;
+    }
+
+    Button CreateFixButton(OptimizationIssue issue) {
+      var fixBtn = new Button(() => {
+        var result = AssetFixer.ApplyFix(issue);
+        if (result.Success) {
+          EditorUtility.DisplayDialog("Fix Applied", result.Message, "OK");
+          // Refresh the view
+          if (!string.IsNullOrEmpty(_currentPath)) {
+            ShowAsset(_currentPath);
+          }
+        } else {
+          EditorUtility.DisplayDialog("Fix Failed", result.Message, "OK");
+        }
+      });
+      fixBtn.text = "Fix";
+      fixBtn.tooltip = AssetFixer.GetFixDescription(issue.FixType);
+      fixBtn.style.fontSize = 9;
+      fixBtn.style.height = 16;
+      fixBtn.style.paddingLeft = 6;
+      fixBtn.style.paddingRight = 6;
+      fixBtn.style.marginLeft = 4;
+      fixBtn.style.backgroundColor = new Color(0.2f, 0.5f, 0.3f);
+      return fixBtn;
     }
 
     VisualElement CreateActionButtons(string assetPath) {
