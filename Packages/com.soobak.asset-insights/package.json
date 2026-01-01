@@ -1,20 +1,37 @@
 {
   "name": "com.soobak.asset-insights",
   "displayName": "Asset Insights",
-  "description": "Unity Editor tool that visualizes asset dependencies, identifies size-heavy assets, and exports Markdown/Mermaid reports.",
+  "description": "Unity Editor tool that visualizes asset dependencies, identifies size-heavy assets, detects unused assets and circular dependencies, and exports Markdown/Mermaid/JSON reports.",
   "version": "0.1.0",
-  "unity": "2021.3",
+  "unity": "6000.0",
   "author": {
     "name": "Soobak",
-    "email": "contact@soobakwalkway.com"
+    "email": "contact@soobakwalkway.com",
+    "url": "https://github.com/soo-bak"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/soo-bak/soobak-asset-insights.git"
+  },
+  "homepage": "https://github.com/soo-bak/soobak-asset-insights",
+  "license": "MIT",
+  "documentationUrl": "https://github.com/soo-bak/soobak-asset-insights#readme",
+  "changelogUrl": "https://github.com/soo-bak/soobak-asset-insights/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/soo-bak/soobak-asset-insights/blob/main/LICENSE",
   "keywords": [
+    "unity",
+    "editor",
     "asset",
     "dependency",
     "optimization",
     "build-size",
+    "unused-assets",
+    "circular-dependency",
     "mermaid",
-    "report"
+    "report",
+    "analyzer",
+    "profiler",
+    "tool"
   ],
   "dependencies": {}
 }
