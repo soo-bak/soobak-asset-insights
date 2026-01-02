@@ -6,6 +6,8 @@
 
 A Unity Editor tool for analyzing asset dependencies, tracking size impact, and generating shareable reports.
 
+![Asset Insights Dashboard](Documentation/Images/dashboard.png)
+
 ---
 
 ## Why Asset Insights?
@@ -25,13 +27,17 @@ A Unity Editor tool for analyzing asset dependencies, tracking size impact, and 
 - **Heavy Hitters** - Identify size-heavy assets that impact build size
 - **Dependency Graph** - Visualize asset relationships in a bidirectional graph view
 
+![Dependency Graph](Documentation/Images/dependency-graph.png)
+
 ### Dashboard
 - **Type Breakdown** - See distribution of assets by file type with size percentages
 - **Largest Assets** - Quick view of top 10 space-consuming files
-- **Unused Assets** - Find assets not referenced by any scene
-- **Optimization Issues** - Detect oversized textures, uncompressed audio
+- **Unused Assets** - Find assets not referenced by any scene with one-click delete
+- **Optimization Issues** - Detect oversized textures, uncompressed audio with auto-fix
 - **Circular Dependencies** - Visualize dependency cycles with clear chain display
 - **Duplicate Assets** - Find files with the same name in multiple locations
+
+![Auto-Fix Feature](Documentation/Images/auto-fix.png)
 
 ### Report Generation
 - **Markdown** - Clean tables for documentation and team sharing
@@ -60,10 +66,21 @@ A Unity Editor tool for analyzing asset dependencies, tracking size impact, and 
 ### Main Window
 Open via `Window > Asset Insights`
 
+![Asset List View](Documentation/Images/asset-list.png)
+
 1. Click **Scan Project** to analyze all assets
-2. Browse assets sorted by size
-3. Use search to filter results
+2. Browse assets sorted by size (multi-select supported)
+3. Use search to filter results (Ctrl+F)
 4. Export reports in your preferred format
+
+**Keyboard Shortcuts:**
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+F` | Focus search |
+| `F5` / `Ctrl+R` | Refresh scan |
+| `Ctrl+A` | Select all |
+| `Delete` | Delete selected |
+| `Ctrl+1/2/3` | Switch views |
 
 ### Context Menu
 Right-click any asset in Project window:
