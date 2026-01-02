@@ -61,6 +61,25 @@ A Unity Editor tool for analyzing asset dependencies, tracking size impact, and 
 1. Clone this repository
 2. Copy `Packages/com.soobak.asset-insights` to your project's `Packages` folder
 
+## Quick Start
+
+Get insights in 30 seconds:
+
+```
+1. Window > Asset Insights
+2. Click "Scan Project"
+3. Switch to Dashboard tab
+4. Done! Review issues and click "Fix" to optimize
+```
+
+| Step | What You'll See |
+|------|-----------------|
+| **Dashboard** | Project health score, unused assets, optimization issues |
+| **Asset List** | All assets sorted by size with dependency counts |
+| **Graph View** | Visual dependency tree for any selected asset |
+
+> **Tip:** Right-click any asset in Project window → `Asset Insights > Why Included?` to trace dependencies
+
 ## Usage
 
 ### Main Window
