@@ -23,21 +23,6 @@ A Unity Editor tool for analyzing asset dependencies, tracking size impact, and 
 
 ---
 
-## Comparison
-
-| Feature | Asset Insights | Unity Default | Asset Hunter Pro | Asset Usage Detector |
-|---------|----------------|---------------|------------------|---------------------|
-| Dependency Graph | ✅ Visual | ❌ | ❌ | ❌ |
-| Unused Asset Detection | ✅ | ❌ | ✅ | ✅ |
-| One-Click Auto-Fix | ✅ | ❌ | ❌ | ❌ |
-| Circular Dependency Detection | ✅ | ❌ | ❌ | ❌ |
-| Size Impact Analysis | ✅ | Partial | ✅ | ❌ |
-| Export Reports (MD/JSON) | ✅ | ❌ | ❌ | ❌ |
-| Bulk Delete | ✅ | ❌ | ✅ | ❌ |
-| Price | **Free** | Free | Paid | Free |
-
----
-
 ## Features
 
 ### Dependency Analysis
