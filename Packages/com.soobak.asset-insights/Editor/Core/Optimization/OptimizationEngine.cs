@@ -35,8 +35,20 @@ namespace Soobak.AssetInsights {
     /// </summary>
     public void InvalidateAsset(string assetPath) {
       _assetIssueCache.Remove(assetPath);
-      // Clear report cache since totals may have changed
-      _cachedReport = null;
+      // Update cached report by removing old issues and re-analyzing just this asset
+      if (_cachedReport != null && _graph.TryGetNode(assetPath, out var node)) {
+        // Remove old issues for this asset
+        _cachedReport.Issues.RemoveAll(i => i.AssetPath == assetPath);
+        // Re-analyze this asset only
+        var newIssues = AnalyzeAssetCached(assetPath).ToList();
+        _cachedReport.Issues.AddRange(newIssues);
+        // Recalculate totals
+        _cachedReport.TotalIssues = _cachedReport.Issues.Count;
+        _cachedReport.TotalPotentialSavings = _cachedReport.Issues.Sum(i => i.PotentialSavings);
+        _cachedReport.IssuesBySeverity = _cachedReport.Issues
+          .GroupBy(i => i.Severity)
+          .ToDictionary(g => g.Key, g => g.Count());
+      }
     }
 
     void RegisterDefaultRules() {
