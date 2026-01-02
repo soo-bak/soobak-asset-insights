@@ -3,6 +3,9 @@
 [![Build](https://github.com/soo-bak/soobak-asset-insights/actions/workflows/unity-tests.yml/badge.svg)](https://github.com/soo-bak/soobak-asset-insights/actions/workflows/unity-tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Unity 6+](https://img.shields.io/badge/Unity-6%2B-black.svg)](https://unity.com/)
+[![GitHub stars](https://img.shields.io/github/stars/soo-bak/soobak-asset-insights?style=social)](https://github.com/soo-bak/soobak-asset-insights/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/soo-bak/soobak-asset-insights)](https://github.com/soo-bak/soobak-asset-insights/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/soo-bak/soobak-asset-insights)](https://github.com/soo-bak/soobak-asset-insights/commits/main)
 
 A Unity Editor tool for analyzing asset dependencies, tracking size impact, and generating shareable reports.
 
