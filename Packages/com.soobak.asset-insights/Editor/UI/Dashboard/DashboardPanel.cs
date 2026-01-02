@@ -902,7 +902,7 @@ namespace Soobak.AssetInsights {
           OnNavigateToAsset?.Invoke(assetPath);
         } else {
           // Single click: Ping asset in project window
-          var asset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+          var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
           if (asset != null) {
             EditorGUIUtility.PingObject(asset);
             Selection.activeObject = asset;
