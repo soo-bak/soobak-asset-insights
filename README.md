@@ -1,6 +1,7 @@
 # Asset Insights
 
 [![Build](https://github.com/soo-bak/soobak-asset-insights/actions/workflows/unity-tests.yml/badge.svg)](https://github.com/soo-bak/soobak-asset-insights/actions/workflows/unity-tests.yml)
+[![Tests](https://img.shields.io/badge/tests-46%2B%20passed-brightgreen)](https://github.com/soo-bak/soobak-asset-insights/actions/workflows/unity-tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Unity 6+](https://img.shields.io/badge/Unity-6%2B-black.svg)](https://unity.com/)
 [![GitHub stars](https://img.shields.io/github/stars/soo-bak/soobak-asset-insights?style=social)](https://github.com/soo-bak/soobak-asset-insights/stargazers)
