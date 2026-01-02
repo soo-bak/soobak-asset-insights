@@ -29,6 +29,16 @@ namespace Soobak.AssetInsights {
       _assetIssueCache.Clear();
     }
 
+    /// <summary>
+    /// Invalidates cache for a specific asset only.
+    /// More efficient than ClearCache() when only one asset changed.
+    /// </summary>
+    public void InvalidateAsset(string assetPath) {
+      _assetIssueCache.Remove(assetPath);
+      // Clear report cache since totals may have changed
+      _cachedReport = null;
+    }
+
     void RegisterDefaultRules() {
       _rules.Add(new TextureSizeRule());
       _rules.Add(new AudioCompressionRule());

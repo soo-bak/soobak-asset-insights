@@ -326,8 +326,10 @@ namespace Soobak.AssetInsights {
               "Fix Complete",
               $"Successfully applied {successCount}/{results.Count} fixes.",
               "OK");
-            // Clear cache so re-analysis picks up the fixes
-            _cachedEngine?.ClearCache();
+            // Invalidate only the fixed assets
+            foreach (var r in results.Where(r => r.Success)) {
+              _cachedEngine?.InvalidateAsset(r.AssetPath);
+            }
             // Refresh the view
             if (!string.IsNullOrEmpty(_currentPath)) {
               ShowAsset(_currentPath);
@@ -392,8 +394,8 @@ namespace Soobak.AssetInsights {
         var result = AssetFixer.ApplyFix(issue);
         if (result.Success) {
           EditorUtility.DisplayDialog("Fix Applied", result.Message, "OK");
-          // Clear cache so re-analysis picks up the fix
-          _cachedEngine?.ClearCache();
+          // Only invalidate the fixed asset, not entire cache
+          _cachedEngine?.InvalidateAsset(issue.AssetPath);
           // Refresh the view
           if (!string.IsNullOrEmpty(_currentPath)) {
             ShowAsset(_currentPath);

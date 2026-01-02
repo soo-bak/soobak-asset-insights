@@ -442,8 +442,12 @@ namespace Soobak.AssetInsights {
                 "Fix Complete",
                 $"Successfully applied {successCount}/{results.Count} fixes.",
                 "OK");
-              // Invalidate cache and refresh
-              InvalidateCache();
+              // Invalidate only the fixed assets
+              foreach (var r in results.Where(r => r.Success)) {
+                _cachedOptimizationEngine?.InvalidateAsset(r.AssetPath);
+              }
+              _cachedOptimizationReport = null;
+              _analysisDirty = true;
               Refresh();
             }
           });
@@ -533,7 +537,10 @@ namespace Soobak.AssetInsights {
         var result = AssetFixer.ApplyFix(issue);
         if (result.Success) {
           EditorUtility.DisplayDialog("Fix Applied", result.Message, "OK");
-          InvalidateCache();
+          // Only invalidate the fixed asset, not entire cache
+          _cachedOptimizationEngine?.InvalidateAsset(issue.AssetPath);
+          _cachedOptimizationReport = null;
+          _analysisDirty = true;
           Refresh();
         } else {
           EditorUtility.DisplayDialog("Fix Failed", result.Message, "OK");
