@@ -81,6 +81,8 @@ namespace Soobak.AssetInsights {
       _cachedCircularResult = null;
       _cachedResourcesResult = null;
       _cachedDuplicates = null;
+      // Clear engine cache so it re-analyzes on next refresh
+      _cachedOptimizationEngine?.ClearCache();
       // Don't clear external cache - it's managed by parent window
       if (!_hasExternalCache) {
         _cachedOptimizationEngine = null;
