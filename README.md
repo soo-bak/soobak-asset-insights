@@ -6,7 +6,7 @@
 
 A Unity Editor tool for analyzing asset dependencies, tracking size impact, and generating shareable reports.
 
-![Asset Insights Dashboard](Documentation/Images/dashboard.png)
+![Asset Insights Overview](Documentation/Images/overview.gif)
 
 ---
 
@@ -27,7 +27,7 @@ A Unity Editor tool for analyzing asset dependencies, tracking size impact, and 
 - **Heavy Hitters** - Identify size-heavy assets that impact build size
 - **Dependency Graph** - Visualize asset relationships in a bidirectional graph view
 
-![Dependency Graph](Documentation/Images/dependency-graph.png)
+![Dependency Graph](Documentation/Images/dependency-graph.gif)
 
 ### Dashboard
 - **Type Breakdown** - See distribution of assets by file type with size percentages
@@ -37,7 +37,7 @@ A Unity Editor tool for analyzing asset dependencies, tracking size impact, and 
 - **Circular Dependencies** - Visualize dependency cycles with clear chain display
 - **Duplicate Assets** - Find files with the same name in multiple locations
 
-![Auto-Fix Feature](Documentation/Images/auto-fix.png)
+![Auto-Fix Feature](Documentation/Images/auto-fix.gif)
 
 ### Report Generation
 - **Markdown** - Clean tables for documentation and team sharing
@@ -66,7 +66,7 @@ A Unity Editor tool for analyzing asset dependencies, tracking size impact, and 
 ### Main Window
 Open via `Window > Asset Insights`
 
-![Asset List View](Documentation/Images/asset-list.png)
+![Asset List View](Documentation/Images/asset-list.gif)
 
 1. Click **Scan Project** to analyze all assets
 2. Browse assets sorted by size (multi-select supported)
