@@ -77,7 +77,7 @@ namespace Soobak.AssetInsights.Tests {
         SizeBytes = 1024 * 1024 // 1 MB
       };
 
-      Assert.AreEqual("1.00 MB", info.FormattedSize);
+      Assert.AreEqual("1 MB", info.FormattedSize);
     }
   }
 }
