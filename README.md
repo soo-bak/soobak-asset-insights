@@ -37,9 +37,13 @@ A Unity Editor tool for analyzing asset dependencies, tracking size impact, and 
 - **Type Breakdown** - See distribution of assets by file type with size percentages
 - **Largest Assets** - Quick view of top 10 space-consuming files
 - **Unused Assets** - Find assets not referenced by any scene with one-click delete
-- **Optimization Issues** - Detect oversized textures, uncompressed audio with auto-fix
 - **Circular Dependencies** - Visualize dependency cycles with clear chain display
 - **Duplicate Assets** - Find files with the same name in multiple locations
+
+### Auto-Fix
+Automatically detect and fix common optimization issues with one click:
+- **Oversized Textures** - Find textures exceeding recommended size and apply compression
+- **Uncompressed Audio** - Detect uncompressed audio files and set optimal import settings
 
 ![Auto-Fix Feature](Documentation/Images/auto-fix.gif)
 
