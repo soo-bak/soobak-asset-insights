@@ -27,6 +27,7 @@
     "build-size",
     "unused-assets",
     "circular-dependency",
+    "addressables",
     "mermaid",
     "report",
     "analyzer",

@@ -20,6 +20,7 @@ namespace Soobak.AssetInsights {
     List<IGrouping<string, AssetNodeModel>> _cachedDuplicates;
     HashSet<string> _cachedUnusedAssets;
     HashSet<string> _cachedCircularAssets;
+    AddressablesAnalysisResult _cachedAddressablesResult;
     bool _analysisDirty = true;
     bool _hasExternalCache;
 
@@ -81,6 +82,7 @@ namespace Soobak.AssetInsights {
       _cachedCircularResult = null;
       _cachedResourcesResult = null;
       _cachedDuplicates = null;
+      _cachedAddressablesResult = null;
       // Clear engine cache so it re-analyzes on next refresh
       _cachedOptimizationEngine?.ClearCache();
       // Don't clear external cache - it's managed by parent window
@@ -133,6 +135,12 @@ namespace Soobak.AssetInsights {
       if (_cachedDuplicates == null) {
         _cachedDuplicates = FindDuplicatesInternal();
       }
+
+      // Addressables analysis (only if package is installed)
+      if (_cachedAddressablesResult == null && AddressablesDetector.IsInstalled) {
+        var scanner = new AddressablesScanner(_graph);
+        _cachedAddressablesResult = scanner.Scan();
+      }
     }
 
     public void Refresh() {
@@ -170,6 +178,9 @@ namespace Soobak.AssetInsights {
 
       // Dynamic Loading
       AddResourcesLoadSection();
+
+      // Addressables (only if installed)
+      AddAddressablesSection();
     }
 
     void AddTypeBreakdownSection() {
@@ -1008,6 +1019,241 @@ namespace Soobak.AssetInsights {
       };
     }
 
+    void AddAddressablesSection() {
+      if (!AddressablesDetector.IsInstalled)
+        return;
+
+      var result = _cachedAddressablesResult;
+      if (result == null) {
+        var section = CreateSection(
+          "Addressables",
+          "Addressables package detected but not configured"
+        );
+        section.Add(CreateEmptyMessage("No Addressable groups found"));
+        _scrollView.Add(section);
+        return;
+      }
+
+      // Main Addressables section with overview
+      var mainSection = CreateSection(
+        $"Addressables ({result.TotalGroups} groups, {result.TotalEntries} assets)",
+        $"Total size: {result.FormattedTotalSize}"
+      );
+
+      // Group breakdown
+      foreach (var group in result.Groups.OrderByDescending(g => g.TotalSizeBytes)) {
+        var row = CreateRow();
+
+        var nameLabel = new Label(group.Name);
+        nameLabel.style.width = 200;
+        nameLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+        row.Add(nameLabel);
+
+        var countLabel = new Label($"{group.EntryCount} assets");
+        countLabel.style.width = 80;
+        countLabel.style.color = new Color(0.6f, 0.6f, 0.6f);
+        row.Add(countLabel);
+
+        var sizeLabel = new Label(group.FormattedSize);
+        sizeLabel.style.width = 80;
+        sizeLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+        row.Add(sizeLabel);
+
+        // Progress bar
+        var percent = result.TotalSizeBytes > 0 ? (float)group.TotalSizeBytes / result.TotalSizeBytes : 0;
+        var bar = new VisualElement();
+        bar.style.flexGrow = 1;
+        bar.style.height = 8;
+        bar.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
+        bar.style.borderTopLeftRadius = 4;
+        bar.style.borderTopRightRadius = 4;
+        bar.style.borderBottomLeftRadius = 4;
+        bar.style.borderBottomRightRadius = 4;
+        bar.style.marginLeft = 8;
+
+        var fill = new VisualElement();
+        fill.style.width = Length.Percent(percent * 100);
+        fill.style.height = Length.Percent(100);
+        fill.style.backgroundColor = new Color(0.4f, 0.6f, 1f);
+        fill.style.borderTopLeftRadius = 4;
+        fill.style.borderBottomLeftRadius = 4;
+        bar.Add(fill);
+
+        row.Add(bar);
+
+        var percentLabel = new Label($"{percent:P0}");
+        percentLabel.style.width = 50;
+        percentLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+        row.Add(percentLabel);
+
+        mainSection.Add(row);
+      }
+
+      _scrollView.Add(mainSection);
+
+      // Duplicate assets in multiple groups
+      if (result.DuplicateAssets.Count > 0) {
+        var dupSection = CreateSection(
+          $"Addressable Duplicates ({result.DuplicateAssets.Count})",
+          "Assets included in multiple Addressable groups - may cause redundant downloads"
+        );
+
+        var isExpanded = _expandedSections.GetValueOrDefault("addr_duplicates", false);
+        var showCount = isExpanded ? ExpandedItemCount : InitialItemCount;
+        var shown = 0;
+
+        foreach (var dup in result.DuplicateAssets.Take(showCount)) {
+          var container = new VisualElement();
+          container.style.marginBottom = 6;
+          container.style.paddingLeft = 8;
+          container.style.borderLeftWidth = 2;
+          container.style.borderLeftColor = new Color(1f, 0.6f, 0.2f);
+
+          var row = CreateClickableRow(dup.AssetPath);
+
+          var icon = new Image();
+          icon.image = AssetDatabase.GetCachedIcon(dup.AssetPath);
+          icon.style.width = 16;
+          icon.style.height = 16;
+          icon.style.marginRight = 6;
+          row.Add(icon);
+
+          var nameLabel = new Label(dup.AssetName);
+          nameLabel.style.flexGrow = 1;
+          row.Add(nameLabel);
+
+          container.Add(row);
+
+          var groupsLabel = new Label($"In groups: {string.Join(", ", dup.GroupNames)}");
+          groupsLabel.style.fontSize = 10;
+          groupsLabel.style.color = new Color(0.6f, 0.6f, 0.6f);
+          groupsLabel.style.marginLeft = 22;
+          container.Add(groupsLabel);
+
+          dupSection.Add(container);
+          shown++;
+        }
+
+        if (result.DuplicateAssets.Count > shown) {
+          dupSection.Add(CreateShowMoreLabel("addr_duplicates", result.DuplicateAssets.Count - shown));
+        }
+
+        _scrollView.Add(dupSection);
+      }
+
+      // Cross-group dependencies
+      if (result.CrossGroupDependencies.Count > 0) {
+        var totalCross = result.TotalCrossGroupDependencies;
+        var crossSection = CreateSection(
+          $"Cross-Group Dependencies ({totalCross})",
+          "Assets that reference assets in other groups - may cause additional bundle loads"
+        );
+
+        var isExpanded = _expandedSections.GetValueOrDefault("addr_cross", false);
+        var showCount = isExpanded ? 30 : 10;
+        var shown = 0;
+
+        foreach (var kvp in result.CrossGroupDependencies) {
+          if (shown >= showCount)
+            break;
+
+          var (sourceGroup, targetGroup) = kvp.Key;
+          var deps = kvp.Value;
+
+          var groupHeader = new Label($"{sourceGroup} → {targetGroup} ({deps.Count} refs)");
+          groupHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
+          groupHeader.style.marginTop = 8;
+          groupHeader.style.marginBottom = 4;
+          crossSection.Add(groupHeader);
+
+          foreach (var dep in deps.Take(5)) {
+            var row = CreateRow();
+            row.style.marginLeft = 12;
+
+            var sourceLabel = new Label(dep.SourceAssetName);
+            sourceLabel.style.width = 150;
+            sourceLabel.style.overflow = Overflow.Hidden;
+            sourceLabel.style.textOverflow = TextOverflow.Ellipsis;
+            row.Add(sourceLabel);
+
+            var arrowLabel = new Label(" → ");
+            arrowLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
+            row.Add(arrowLabel);
+
+            var targetLabel = new Label(dep.TargetAssetName);
+            targetLabel.style.color = new Color(0.8f, 0.6f, 0.4f);
+            row.Add(targetLabel);
+
+            crossSection.Add(row);
+          }
+
+          if (deps.Count > 5) {
+            var moreLabel = new Label($"  ...and {deps.Count - 5} more");
+            moreLabel.style.fontSize = 10;
+            moreLabel.style.color = new Color(0.5f, 0.5f, 0.5f);
+            moreLabel.style.marginLeft = 12;
+            crossSection.Add(moreLabel);
+          }
+
+          shown++;
+        }
+
+        if (result.CrossGroupDependencies.Count > shown) {
+          crossSection.Add(CreateShowMoreLabel("addr_cross", result.CrossGroupDependencies.Count - shown));
+        }
+
+        _scrollView.Add(crossSection);
+      }
+
+      // Implicit dependencies (not explicitly in any group)
+      if (result.ImplicitDependencies.Count > 0) {
+        var implicitSection = CreateSection(
+          $"Implicit Dependencies ({result.ImplicitDependencies.Count})",
+          "Assets not in any group but pulled in by Addressable assets"
+        );
+
+        var isExpanded = _expandedSections.GetValueOrDefault("addr_implicit", false);
+        var showCount = isExpanded ? ExpandedItemCount : InitialItemCount;
+        var shown = 0;
+
+        // Group by referenced asset for cleaner display
+        var grouped = result.ImplicitDependencies
+          .GroupBy(i => i.AssetPath)
+          .OrderByDescending(g => g.Count())
+          .Take(showCount);
+
+        foreach (var group in grouped) {
+          var row = CreateClickableRow(group.Key);
+
+          var icon = new Image();
+          icon.image = AssetDatabase.GetCachedIcon(group.Key);
+          icon.style.width = 16;
+          icon.style.height = 16;
+          icon.style.marginRight = 6;
+          row.Add(icon);
+
+          var nameLabel = new Label(group.First().AssetName);
+          nameLabel.style.flexGrow = 1;
+          row.Add(nameLabel);
+
+          var refCountLabel = new Label($"refs: {group.Count()}");
+          refCountLabel.style.color = new Color(0.6f, 0.6f, 0.6f);
+          refCountLabel.style.fontSize = 10;
+          row.Add(refCountLabel);
+
+          implicitSection.Add(row);
+          shown++;
+        }
+
+        var totalImplicit = result.ImplicitDependencies.Select(i => i.AssetPath).Distinct().Count();
+        if (totalImplicit > shown) {
+          implicitSection.Add(CreateShowMoreLabel("addr_implicit", totalImplicit - shown));
+        }
+
+        _scrollView.Add(implicitSection);
+      }
+    }
+
     /// <summary>
     /// Cleanup resources when the panel is being destroyed.
     /// </summary>
@@ -1019,6 +1265,7 @@ namespace Soobak.AssetInsights {
       _cachedCircularResult = null;
       _cachedResourcesResult = null;
       _cachedDuplicates = null;
+      _cachedAddressablesResult = null;
 
       // Don't null external cache references - they're managed by parent
       if (!_hasExternalCache) {

@@ -47,6 +47,13 @@ Automatically detect and fix common optimization issues with one click:
 
 ![Auto-Fix Feature](Documentation/Images/auto-fix.gif)
 
+### Addressables Support
+If you have the Addressables package installed, Asset Insights automatically detects and analyzes:
+- **Group Size Breakdown** - See which Addressable groups consume the most space
+- **Duplicate Detection** - Find assets included in multiple groups (causes redundant downloads)
+- **Cross-Group Dependencies** - Identify references between groups that may cause extra bundle loads
+- **Implicit Dependencies** - Discover assets pulled in by Addressables but not explicitly assigned
+
 ### Report Generation
 - **Markdown** - Clean tables for documentation and team sharing
 - **Mermaid** - Flowchart diagrams for visual dependency mapping
