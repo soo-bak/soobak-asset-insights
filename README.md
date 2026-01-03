@@ -54,6 +54,8 @@ If you have the Addressables package installed, Asset Insights automatically det
 - **Cross-Group Dependencies** - Identify references between groups that may cause extra bundle loads
 - **Implicit Dependencies** - Discover assets pulled in by Addressables but not explicitly assigned
 
+![Addressables Analysis](Documentation/Images/addressables.png)
+
 ### Report Generation
 - **Markdown** - Clean tables for documentation and team sharing
 - **Mermaid** - Flowchart diagrams for visual dependency mapping
