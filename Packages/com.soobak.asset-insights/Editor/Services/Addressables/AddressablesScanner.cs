@@ -63,21 +63,69 @@ namespace Soobak.AssetInsights {
 
     AddressableGroupModel ScanGroup(object group) {
       try {
-        var nameProperty = group.GetType().GetProperty("Name");
-        var entriesProperty = group.GetType().GetProperty("entries");
+        var groupType = group.GetType();
+        var nameProperty = groupType.GetProperty("Name");
 
-        if (nameProperty == null || entriesProperty == null)
+        if (nameProperty == null)
           return null;
 
         var groupName = nameProperty.GetValue(group) as string ?? "Unknown";
-        var entries = entriesProperty.GetValue(group) as System.Collections.IList;
 
         var model = new AddressableGroupModel {
           Name = groupName
         };
 
+        // Try multiple ways to get entries
+        System.Collections.IEnumerable entries = null;
+
+        // Get all properties for debugging
+        var allProps = groupType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+        // Debug: Log all available properties
+        var propNames = new List<string>();
+        foreach (var p in allProps) {
+          propNames.Add($"{p.Name} ({p.PropertyType.Name})");
+        }
+        UnityEngine.Debug.Log($"[Asset Insights] Group '{groupName}' properties: {string.Join(", ", propNames)}");
+
+        // Method 1: Try "entries" property (common in most versions)
+        var entriesProperty = groupType.GetProperty("entries", BindingFlags.Public | BindingFlags.Instance);
+        if (entriesProperty != null) {
+          var value = entriesProperty.GetValue(group);
+          entries = value as System.Collections.IEnumerable;
+        }
+
+        // Method 2: Try "Entries" property
+        if (entries == null) {
+          var entriesPropertyUpper = groupType.GetProperty("Entries", BindingFlags.Public | BindingFlags.Instance);
+          if (entriesPropertyUpper != null) {
+            var value = entriesPropertyUpper.GetValue(group);
+            entries = value as System.Collections.IEnumerable;
+          }
+        }
+
+        // Method 3: Look for any property that returns a collection of entries
+        if (entries == null) {
+          foreach (var prop in allProps) {
+            if (prop.Name.ToLower().Contains("entr") || prop.Name.ToLower().Contains("asset")) {
+              var value = prop.GetValue(group);
+              if (value is System.Collections.IEnumerable enumerable && !(value is string)) {
+                // Check if it contains AddressableAssetEntry items
+                foreach (var item in enumerable) {
+                  if (item != null && item.GetType().Name.Contains("AddressableAssetEntry")) {
+                    entries = enumerable;
+                    break;
+                  }
+                }
+                if (entries != null) break;
+              }
+            }
+          }
+        }
+
         if (entries != null) {
           foreach (var entry in entries) {
+            if (entry == null) continue;
             var entryModel = ScanEntry(entry, groupName);
             if (entryModel != null) {
               model.Entries.Add(entryModel);
@@ -87,7 +135,8 @@ namespace Soobak.AssetInsights {
         }
 
         return model;
-      } catch {
+      } catch (Exception e) {
+        UnityEngine.Debug.LogWarning($"[Asset Insights] Error scanning group: {e.Message}\n{e.StackTrace}");
         return null;
       }
     }
