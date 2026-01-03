@@ -78,15 +78,8 @@ namespace Soobak.AssetInsights {
         // Try multiple ways to get entries
         System.Collections.IEnumerable entries = null;
 
-        // Get all properties for debugging
+        // Get all properties
         var allProps = groupType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-        // Debug: Log all available properties
-        var propNames = new List<string>();
-        foreach (var p in allProps) {
-          propNames.Add($"{p.Name} ({p.PropertyType.Name})");
-        }
-        UnityEngine.Debug.Log($"[Asset Insights] Group '{groupName}' properties: {string.Join(", ", propNames)}");
 
         // Method 1: Try "entries" property (common in most versions)
         var entriesProperty = groupType.GetProperty("entries", BindingFlags.Public | BindingFlags.Instance);
